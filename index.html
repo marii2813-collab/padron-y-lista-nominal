@@ -31,7 +31,7 @@
       color: #0f172a;
     }
 
-    /* Etiqueta de sección: sin fondo, con halo de legibilidad. El tamaño se calcula por zoom en JS */
+    /* Etiqueta de sección: sin fondo, con halo de legibilidad. El tamaño lo define JS */
     .etiqueta-seccion {
       background: transparent !important;
       border: none !important;
@@ -379,6 +379,9 @@
     let archivosFallidos = 0;
     const etiquetasSeccion = [];
 
+    // Tamaño fijo para todas las etiquetas (en píxeles)
+    const TAMANO_ETIQUETA = 11;
+
     // Lectura segura de atributos del GeoJSON
     function leerPadron(props) {
       return Number(props['PADRÓN ELECTORAL TOTAL'] ?? props['PADRON ELECTORAL TOTAL'] ?? 0) || 0;
@@ -448,27 +451,17 @@
       return mejor ? { lng: mejor[0], lat: mejor[1], radio: mejorDist } : null;
     }
 
-    // Ajusta el tamaño de cada etiqueta al radio real que tiene su sección en pantalla
+    // Aplica el mismo tamaño a todas las etiquetas
     function ajustarEtiquetas() {
       etiquetasSeccion.forEach(e => {
-        const p0 = map.latLngToContainerPoint([e.lat, e.lng]);
-        const p1 = map.latLngToContainerPoint([e.lat, e.lng + e.radio]);
-        const radioPx = Math.abs(p1.x - p0.x);
-
-        // Diagonal de un rectángulo de texto inscrito en un círculo de radio radioPx
-        const len = e.seccion.length;
-        const fs = Math.min(42, (2 * radioPx * 0.9) / Math.sqrt(Math.pow(0.6 * len, 2) + 1));
-
         e.marker.setIcon(L.divIcon({
           className: 'etiqueta-seccion',
           iconSize: [0, 0],
-          html: `<span style="font-size:${fs.toFixed(1)}px">${e.seccion}</span>`
+          html: `<span style="font-size:${TAMANO_ETIQUETA}px">${e.seccion}</span>`
         }));
-        e.marker.setOpacity(fs < 5 ? 0 : 1); // oculta etiquetas que no caben legibles
+        e.marker.setOpacity(1);
       });
     }
-
-    map.on('zoomend', ajustarEtiquetas);
 
     // =========================================================================
     // CARGA DE ARCHIVOS GEOJSON
