@@ -261,9 +261,9 @@
     <main class="flex-1 relative h-full w-full">
       <div id="map" class="h-full w-full z-10"></div>
 
-      <!-- Tarjetas KPI Flotantes Superiores -->
+      <!-- Tarjetas KPI Flotantes Superiores (3 tarjetas limpias sin % Cobertura) -->
       <div class="absolute top-3 left-3 right-14 z-20 pointer-events-none">
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 max-w-4xl">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 max-w-3xl">
           <div class="bg-white/95 backdrop-blur-sm border border-slate-200/90 rounded-xl p-2.5 sm:p-3 shadow-md pointer-events-auto">
             <p class="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500">Total Secciones</p>
             <p id="kpiTotalSecciones" class="text-base sm:text-xl font-extrabold text-slate-900 mt-0.5">0</p>
@@ -277,11 +277,6 @@
           <div class="bg-white/95 backdrop-blur-sm border border-slate-200/90 rounded-xl p-2.5 sm:p-3 shadow-md pointer-events-auto">
             <p class="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500">Lista Nominal Total</p>
             <p id="kpiNominalTotal" class="text-base sm:text-xl font-extrabold text-emerald-600 mt-0.5">0</p>
-          </div>
-
-          <div class="bg-white/95 backdrop-blur-sm border border-slate-200/90 rounded-xl p-2.5 sm:p-3 shadow-md pointer-events-auto">
-            <p class="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500">% Cobertura (LN/Padrón)</p>
-            <p id="kpiCoberturaTotal" class="text-base sm:text-xl font-extrabold text-blue-600 mt-0.5">0.00%</p>
           </div>
         </div>
       </div>
@@ -348,7 +343,6 @@
                   <th class="py-2.5 px-3 text-center font-bold">Total Secciones</th>
                   <th class="py-2.5 px-3 text-right font-bold">Padrón Electoral Total</th>
                   <th class="py-2.5 px-3 text-right font-bold">Lista Nominal Total</th>
-                  <th class="py-2.5 px-3 text-right font-bold">% Cobertura (LN/Padrón)</th>
                 </tr>
               </thead>
               <tbody id="tbodyReporteResumen" class="divide-y divide-slate-200"></tbody>
@@ -369,7 +363,6 @@
                   <th class="py-2.5 px-3 text-center font-bold">Número de Sección</th>
                   <th class="py-2.5 px-3 text-right font-bold">Padrón Electoral Total</th>
                   <th class="py-2.5 px-3 text-right font-bold">Lista Nominal Total</th>
-                  <th class="py-2.5 px-3 text-right font-bold">% Cobertura</th>
                 </tr>
               </thead>
               <tbody id="tbodyReporteDesglose" class="divide-y divide-slate-200"></tbody>
@@ -392,7 +385,7 @@
 
     L.control.zoom({ position: 'topright' }).addTo(map);
 
-    // Mapa base corregido: OpenStreetMap estándar (libre y sin restricciones de API Key)
+    // Mapa base OpenStreetMap estándar (sin marcas de agua ni API Key)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -470,7 +463,6 @@
               const seccion = String(p.SECCION ?? '').trim();
               const padron = leerPadron(p);
               const nominal = leerListaNominal(p);
-              const cobertura = padron > 0 ? ((nominal / padron) * 100).toFixed(2) : '0.00';
 
               if (seccion) {
                 listaSecciones.push({
@@ -478,12 +470,11 @@
                   seccion: seccion,
                   padron: padron,
                   nominal: nominal,
-                  cobertura: cobertura,
                   layer: layer
                 });
                 mapaCapasPorSeccion[seccion] = layer;
 
-                // Popup con datos electorales
+                // Popup limpio con datos electorales (sin % cobertura)
                 const htmlPopup = `
                   <div class="min-w-[205px] text-xs space-y-1.5">
                     <div class="flex items-center justify-between border-b border-slate-200 pb-1">
@@ -499,10 +490,6 @@
                     <div class="flex justify-between">
                       <span class="text-slate-500">Lista Nominal Total:</span>
                       <span class="font-bold text-emerald-700">${nominal.toLocaleString('es-MX')}</span>
-                    </div>
-                    <div class="flex justify-between border-t border-slate-100 pt-1">
-                      <span class="text-slate-500">% Cobertura (LN/Padrón):</span>
-                      <span class="font-bold text-blue-700">${cobertura}%</span>
                     </div>
                   </div>
                 `;
@@ -648,12 +635,10 @@
       const totalSec = filtradas.length;
       const totalPad = filtradas.reduce((acc, s) => acc + s.padron, 0);
       const totalNom = filtradas.reduce((acc, s) => acc + s.nominal, 0);
-      const cobertura = totalPad > 0 ? ((totalNom / totalPad) * 100).toFixed(2) : '0.00';
 
       document.getElementById('kpiTotalSecciones').textContent = totalSec.toLocaleString('es-MX');
       document.getElementById('kpiPadronTotal').textContent = totalPad.toLocaleString('es-MX');
       document.getElementById('kpiNominalTotal').textContent = totalNom.toLocaleString('es-MX');
-      document.getElementById('kpiCoberturaTotal').textContent = `${cobertura}%`;
     }
 
     // =========================================================================
@@ -824,7 +809,6 @@
         const delDistrito = seccionesReporte.filter(s => s.distrito === dist);
         const pad = delDistrito.reduce((acc, s) => acc + s.padron, 0);
         const nom = delDistrito.reduce((acc, s) => acc + s.nominal, 0);
-        const cob = pad > 0 ? ((nom / pad) * 100).toFixed(2) : '0.00';
 
         granTotalSec += delDistrito.length;
         granTotalPad += pad;
@@ -836,20 +820,17 @@
             <td class="py-2.5 px-3 text-center font-semibold">${delDistrito.length.toLocaleString('es-MX')}</td>
             <td class="py-2.5 px-3 text-right font-bold text-amber-700">${pad.toLocaleString('es-MX')}</td>
             <td class="py-2.5 px-3 text-right font-bold text-emerald-700">${nom.toLocaleString('es-MX')}</td>
-            <td class="py-2.5 px-3 text-right font-semibold text-blue-700">${cob}%</td>
           </tr>
         `;
       });
 
       if (distritosUnicos.length > 1) {
-        const granCob = granTotalPad > 0 ? ((granTotalNom / granTotalPad) * 100).toFixed(2) : '0.00';
         tbodyResumen.innerHTML += `
           <tr class="bg-slate-100 font-extrabold text-slate-900">
             <td class="py-2.5 px-3">TOTAL CONSOLIDADO</td>
             <td class="py-2.5 px-3 text-center">${granTotalSec.toLocaleString('es-MX')}</td>
             <td class="py-2.5 px-3 text-right text-amber-800">${granTotalPad.toLocaleString('es-MX')}</td>
             <td class="py-2.5 px-3 text-right text-emerald-800">${granTotalNom.toLocaleString('es-MX')}</td>
-            <td class="py-2.5 px-3 text-right text-blue-800">${granCob}%</td>
           </tr>
         `;
       }
@@ -871,18 +852,15 @@
               <td class="py-2 px-3 text-center font-bold text-slate-900">${s.seccion}</td>
               <td class="py-2 px-3 text-right text-amber-700 font-medium">${s.padron.toLocaleString('es-MX')}</td>
               <td class="py-2 px-3 text-right text-emerald-700 font-medium">${s.nominal.toLocaleString('es-MX')}</td>
-              <td class="py-2 px-3 text-right text-slate-600">${s.cobertura}%</td>
             </tr>
           `;
         });
 
-        const subCob = subPad > 0 ? ((subNom / subPad) * 100).toFixed(2) : '0.00';
         tbodyDesglose.innerHTML += `
           <tr class="bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-300">
             <td class="py-2 px-3" colspan="2">SUBTOTAL DISTRITO LOCAL ${dist} (${delDistrito.length} secciones)</td>
             <td class="py-2 px-3 text-right text-amber-800">${subPad.toLocaleString('es-MX')}</td>
             <td class="py-2 px-3 text-right text-emerald-800">${subNom.toLocaleString('es-MX')}</td>
-            <td class="py-2 px-3 text-right text-blue-800">${subCob}%</td>
           </tr>
         `;
       });
@@ -900,7 +878,7 @@
 
       if (seccionesReporte.length === 0) return;
 
-      let csv = '\uFEFFDistrito Local,Numero de Seccion,Padron Electoral Total,Lista Nominal Total,Porcentaje Cobertura\n';
+      let csv = '\uFEFFDistrito Local,Numero de Seccion,Padron Electoral Total,Lista Nominal Total\n';
       const distritosUnicos = [...new Set(seccionesReporte.map(s => s.distrito))].sort((a, b) => Number(a) - Number(b));
 
       distritosUnicos.forEach(dist => {
@@ -910,11 +888,10 @@
         delDistrito.forEach(s => {
           subPad += s.padron;
           subNom += s.nominal;
-          csv += `Distrito Local ${s.distrito},${s.seccion},${s.padron},${s.nominal},${s.cobertura}%\n`;
+          csv += `Distrito Local ${s.distrito},${s.seccion},${s.padron},${s.nominal}\n`;
         });
 
-        const subCob = subPad > 0 ? ((subNom / subPad) * 100).toFixed(2) : '0.00';
-        csv += `TOTAL DISTRITO LOCAL ${dist},${delDistrito.length} secciones,${subPad},${subNom},${subCob}%\n\n`;
+        csv += `TOTAL DISTRITO LOCAL ${dist},${delDistrito.length} secciones,${subPad},${subNom}\n\n`;
       });
 
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
