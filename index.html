@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  <!-- Turf.js para cálculo exacto de centroides interiores en polígonos -->
+  <!-- Turf.js para cálculo exacto de centros geométricos interiores -->
   <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
 
   <style>
@@ -31,20 +31,22 @@
       color: #0f172a;
     }
 
-    /* Etiquetas limpias con halo de texto perfectamente centradas dentro de su polígono */
+    /* Etiquetas compactas, elegantes y perfectamente centradas en su polígono */
     .etiqueta-seccion {
-      background: transparent !important;
-      border: none !important;
-      box-shadow: none !important;
-      font-weight: 800 !important;
-      font-size: 10px !important;
+      background: rgba(255, 255, 255, 0.92) !important;
+      border: 1px solid rgba(15, 23, 42, 0.22) !important;
+      border-radius: 4px !important;
+      font-weight: 700 !important;
+      font-size: 8.5px !important;
       color: #0f172a !important;
-      text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.95), 
-                   -1px -1px 2px rgba(255, 255, 255, 0.95), 
-                   1px -1px 2px rgba(255, 255, 255, 0.95), 
-                   -1px 1px 2px rgba(255, 255, 255, 0.95) !important;
+      padding: 1px 3px !important;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15) !important;
       text-align: center !important;
       white-space: nowrap !important;
+    }
+
+    .etiqueta-seccion::before {
+      display: none !important;
     }
 
     /* Personalización de popups Leaflet */
@@ -461,31 +463,45 @@
                 `;
                 layer.bindPopup(htmlPopup);
 
-                // Cálculo exacto de punto interior garantizado usando Turf.js (evita que salga del polígono)
+                // Cálculo de centroide con validación estricta de interior usando Turf.js
                 try {
-                  const puntoInterior = turf.pointOnFeature(feature);
-                  if (puntoInterior && puntoInterior.geometry && puntoInterior.geometry.coordinates) {
-                    const [lng, lat] = puntoInterior.geometry.coordinates;
+                  let coord = null;
+                  // 1. Intentar el centro de masa
+                  const com = turf.centerOfMass(feature);
+                  if (com && com.geometry && com.geometry.coordinates) {
+                    if (turf.booleanPointInPolygon(com, feature)) {
+                      coord = com.geometry.coordinates;
+                    }
+                  }
+                  // 2. Si no cae dentro, usar punto seguro sobre la superficie
+                  if (!coord) {
+                    const pof = turf.pointOnFeature(feature);
+                    if (pof && pof.geometry && pof.geometry.coordinates) {
+                      coord = pof.geometry.coordinates;
+                    }
+                  }
+
+                  if (coord) {
+                    const [lng, lat] = coord;
                     const marcadorEtiqueta = L.marker([lat, lng], {
                       icon: L.divIcon({
                         className: 'etiqueta-seccion',
                         html: seccion,
-                        iconSize: [40, 16],
-                        iconAnchor: [20, 8]
+                        iconSize: [34, 15],
+                        iconAnchor: [17, 7]
                       }),
                       interactive: false
                     });
                     grupoEtiquetas.addLayer(marcadorEtiqueta);
                   }
                 } catch (err) {
-                  // Fallback al centro de la capa si Turf.js falla por geometría
                   const centroFallback = layer.getBounds().getCenter();
                   const marcadorEtiqueta = L.marker([centroFallback.lat, centroFallback.lng], {
                     icon: L.divIcon({
                       className: 'etiqueta-seccion',
                       html: seccion,
-                      iconSize: [40, 16],
-                      iconAnchor: [20, 8]
+                      iconSize: [34, 15],
+                      iconAnchor: [17, 7]
                     }),
                     interactive: false
                   });
