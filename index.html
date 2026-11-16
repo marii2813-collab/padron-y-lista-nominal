@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  <!-- Turf.js para análisis espacial y cálculo exacto de centroides interiores -->
+  <!-- Turf.js para análisis espacial interno -->
   <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
 
   <style>
@@ -31,13 +31,13 @@
       color: #0f172a;
     }
 
-    /* Etiquetas limpias sin recuadro blanco: texto compacto con halo legible */
+    /* Etiqueta ultra pequeña, limpia y sin recuadro con halo de legibilidad */
     .etiqueta-seccion {
       background: transparent !important;
       border: none !important;
       box-shadow: none !important;
       font-weight: 800 !important;
-      font-size: 9.5px !important;
+      font-size: 8px !important;
       color: #0f172a !important;
       text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.95), 
                    -1px -1px 2px rgba(255, 255, 255, 0.95), 
@@ -466,21 +466,34 @@
                 `;
                 layer.bindPopup(htmlPopup);
 
-                // Algoritmo espacial avanzado con Turf.js para garantizar ubicación interna precisa
+                // Algoritmo espacial estricto para forzar el punto dentro del polígono
                 try {
                   let coord = null;
 
-                  // 1. Intentar centro de masa seguro estrictamente dentro del polígono
+                  // 1. Aplicar contracción geométrica (buffer negativo) para obtener el núcleo interno absoluto
                   try {
+                    const buffered = turf.buffer(feature, -0.00015, { units: 'degrees' });
+                    if (buffered && buffered.geometry) {
+                      const pofBuffer = turf.pointOnFeature(buffered);
+                      if (pofBuffer && pofBuffer.geometry && pofBuffer.geometry.coordinates) {
+                        if (turf.booleanPointInPolygon(pofBuffer, feature)) {
+                          coord = pofBuffer.geometry.coordinates;
+                        }
+                      }
+                    }
+                  } catch (e) {}
+
+                  // 2. Si no hay buffer, usar centro de masa validado
+                  if (!coord) {
                     const com = turf.centerOfMass(feature);
                     if (com && com.geometry && com.geometry.coordinates) {
                       if (turf.booleanPointInPolygon(com, feature)) {
                         coord = com.geometry.coordinates;
                       }
                     }
-                  } catch (e) {}
+                  }
 
-                  // 2. Si el centro de masa cae fuera, intentar pointOnFeature
+                  // 3. Respaldo por pointOnFeature estándar
                   if (!coord) {
                     const pof = turf.pointOnFeature(feature);
                     if (pof && pof.geometry && pof.geometry.coordinates) {
@@ -490,7 +503,7 @@
                     }
                   }
 
-                  // 3. Respaldo definitivo (centroide estándar de Leaflet asegurando validez)
+                  // 4. Respaldo definitivo (centroide Leaflet)
                   if (!coord) {
                     const centroLayer = layer.getBounds().getCenter();
                     coord = [centroLayer.lng, centroLayer.lat];
@@ -501,8 +514,8 @@
                     icon: L.divIcon({
                       className: 'etiqueta-seccion',
                       html: seccion,
-                      iconSize: [28, 12],
-                      iconAnchor: [14, 6]
+                      iconSize: [24, 10],
+                      iconAnchor: [12, 5]
                     }),
                     interactive: false
                   });
@@ -514,8 +527,8 @@
                     icon: L.divIcon({
                       className: 'etiqueta-seccion',
                       html: seccion,
-                      iconSize: [28, 12],
-                      iconAnchor: [14, 6]
+                      iconSize: [24, 10],
+                      iconAnchor: [12, 5]
                     }),
                     interactive: false
                   });
