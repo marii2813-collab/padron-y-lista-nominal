@@ -31,16 +31,19 @@
       color: #0f172a;
     }
 
-    /* Etiquetas compactas, pequeñas y perfectamente centradas dentro de su polígono */
+    /* Etiquetas limpias sin recuadro blanco: texto compacto con halo legible */
     .etiqueta-seccion {
-      background: rgba(255, 255, 255, 0.94) !important;
-      border: 1px solid rgba(15, 23, 42, 0.2) !important;
-      border-radius: 3px !important;
-      font-weight: 700 !important;
-      font-size: 8px !important;
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      font-weight: 800 !important;
+      font-size: 9.5px !important;
       color: #0f172a !important;
-      padding: 0px 2px !important;
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12) !important;
+      text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.95), 
+                   -1px -1px 2px rgba(255, 255, 255, 0.95), 
+                   1px -1px 2px rgba(255, 255, 255, 0.95), 
+                   -1px 1px 2px rgba(255, 255, 255, 0.95) !important;
+      padding: 0 !important;
       text-align: center !important;
       white-space: nowrap !important;
     }
@@ -463,52 +466,56 @@
                 `;
                 layer.bindPopup(htmlPopup);
 
-                // Algoritmo avanzado con Turf.js para garantizar que la etiqueta esté 100% dentro del polígono
+                // Algoritmo espacial avanzado con Turf.js para garantizar ubicación interna precisa
                 try {
                   let coord = null;
-                  
-                  // 1. Intentar aplicar un buffer negativo (contracción) para asegurar que el punto no quede en la frontera
+
+                  // 1. Intentar centro de masa seguro estrictamente dentro del polígono
                   try {
-                    const buffered = turf.buffer(feature, -0.00008, { units: 'degrees' });
-                    if (buffered && buffered.geometry) {
-                      const pofBuffer = turf.pointOnFeature(buffered);
-                      if (pofBuffer && pofBuffer.geometry && pofBuffer.geometry.coordinates) {
-                        if (turf.booleanPointInPolygon(pofBuffer, feature)) {
-                          coord = pofBuffer.geometry.coordinates;
-                        }
+                    const com = turf.centerOfMass(feature);
+                    if (com && com.geometry && com.geometry.coordinates) {
+                      if (turf.booleanPointInPolygon(com, feature)) {
+                        coord = com.geometry.coordinates;
                       }
                     }
                   } catch (e) {}
 
-                  // 2. Si no funcionó el buffer, usar pointOnFeature estándar sobre la feature original
+                  // 2. Si el centro de masa cae fuera, intentar pointOnFeature
                   if (!coord) {
                     const pof = turf.pointOnFeature(feature);
                     if (pof && pof.geometry && pof.geometry.coordinates) {
-                      coord = pof.geometry.coordinates;
+                      if (turf.booleanPointInPolygon(pof, feature)) {
+                        coord = pof.geometry.coordinates;
+                      }
                     }
                   }
 
-                  if (coord) {
-                    const [lng, lat] = coord;
-                    const marcadorEtiqueta = L.marker([lat, lng], {
-                      icon: L.divIcon({
-                        className: 'etiqueta-seccion',
-                        html: seccion,
-                        iconSize: [30, 14],
-                        iconAnchor: [15, 7]
-                      }),
-                      interactive: false
-                    });
-                    grupoEtiquetas.addLayer(marcadorEtiqueta);
+                  // 3. Respaldo definitivo (centroide estándar de Leaflet asegurando validez)
+                  if (!coord) {
+                    const centroLayer = layer.getBounds().getCenter();
+                    coord = [centroLayer.lng, centroLayer.lat];
                   }
+
+                  const [lng, lat] = coord;
+                  const marcadorEtiqueta = L.marker([lat, lng], {
+                    icon: L.divIcon({
+                      className: 'etiqueta-seccion',
+                      html: seccion,
+                      iconSize: [28, 12],
+                      iconAnchor: [14, 6]
+                    }),
+                    interactive: false
+                  });
+                  grupoEtiquetas.addLayer(marcadorEtiqueta);
+
                 } catch (err) {
                   const centroFallback = layer.getBounds().getCenter();
                   const marcadorEtiqueta = L.marker([centroFallback.lat, centroFallback.lng], {
                     icon: L.divIcon({
                       className: 'etiqueta-seccion',
                       html: seccion,
-                      iconSize: [30, 14],
-                      iconAnchor: [15, 7]
+                      iconSize: [28, 12],
+                      iconAnchor: [14, 6]
                     }),
                     interactive: false
                   });
