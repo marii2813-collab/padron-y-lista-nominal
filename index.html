@@ -408,6 +408,63 @@
     }
 
     // =========================================================================
+    // CÁLCULO SEGURO DE PUNTO INTERIOR PARA POLÍGONOS Y MULTIPOLÍGONOS
+    // =========================================================================
+    function obtenerPuntoInteriorSeccion(feature, layer) {
+      try {
+        let polyTarget = feature;
+
+        // Si es MultiPolygon, aislar el polígono principal de mayor área
+        if (feature.geometry && feature.geometry.type === 'MultiPolygon') {
+          let mayorArea = -1;
+          let mejorCoords = null;
+          feature.geometry.coordinates.forEach(coordsPoly => {
+            const polyTemp = turf.polygon(coordsPoly);
+            const area = turf.area(polyTemp);
+            if (area > mayorArea) {
+              mayorArea = area;
+              mejorCoords = coordsPoly;
+            }
+          });
+          if (mejorCoords) {
+            polyTarget = turf.polygon(mejorCoords);
+          }
+        }
+
+        let coord = null;
+
+        // 1. Intentar centro de masa en el polígono principal
+        const com = turf.centerOfMass(polyTarget);
+        if (com && com.geometry && com.geometry.coordinates) {
+          if (turf.booleanPointInPolygon(com, polyTarget)) {
+            coord = com.geometry.coordinates;
+          }
+        }
+
+        // 2. Si no es válido, usar pointOnFeature
+        if (!coord) {
+          const pof = turf.pointOnFeature(polyTarget);
+          if (pof && pof.geometry && pof.geometry.coordinates) {
+            if (turf.booleanPointInPolygon(pof, polyTarget)) {
+              coord = pof.geometry.coordinates;
+            }
+          }
+        }
+
+        // 3. Respaldo definitivo al centro de la capa Leaflet
+        if (!coord) {
+          const c = layer.getBounds().getCenter();
+          coord = [c.lng, c.lat];
+        }
+
+        return [coord[1], coord[0]]; // [lat, lng]
+      } catch (err) {
+        const c = layer.getBounds().getCenter();
+        return [c.lat, c.lng];
+      }
+    }
+
+    // =========================================================================
     // CARGA DE ARCHIVOS GEOJSON
     // =========================================================================
     async function cargarCapaGeoJSON(nombreArchivo, grupoDestino, grupoEtiquetas, tipo) {
@@ -466,74 +523,18 @@
                 `;
                 layer.bindPopup(htmlPopup);
 
-                // Algoritmo espacial estricto para forzar el punto dentro del polígono
-                try {
-                  let coord = null;
-
-                  // 1. Aplicar contracción geométrica (buffer negativo) para obtener el núcleo interno absoluto
-                  try {
-                    const buffered = turf.buffer(feature, -0.00015, { units: 'degrees' });
-                    if (buffered && buffered.geometry) {
-                      const pofBuffer = turf.pointOnFeature(buffered);
-                      if (pofBuffer && pofBuffer.geometry && pofBuffer.geometry.coordinates) {
-                        if (turf.booleanPointInPolygon(pofBuffer, feature)) {
-                          coord = pofBuffer.geometry.coordinates;
-                        }
-                      }
-                    }
-                  } catch (e) {}
-
-                  // 2. Si no hay buffer, usar centro de masa validado
-                  if (!coord) {
-                    const com = turf.centerOfMass(feature);
-                    if (com && com.geometry && com.geometry.coordinates) {
-                      if (turf.booleanPointInPolygon(com, feature)) {
-                        coord = com.geometry.coordinates;
-                      }
-                    }
-                  }
-
-                  // 3. Respaldo por pointOnFeature estándar
-                  if (!coord) {
-                    const pof = turf.pointOnFeature(feature);
-                    if (pof && pof.geometry && pof.geometry.coordinates) {
-                      if (turf.booleanPointInPolygon(pof, feature)) {
-                        coord = pof.geometry.coordinates;
-                      }
-                    }
-                  }
-
-                  // 4. Respaldo definitivo (centroide Leaflet)
-                  if (!coord) {
-                    const centroLayer = layer.getBounds().getCenter();
-                    coord = [centroLayer.lng, centroLayer.lat];
-                  }
-
-                  const [lng, lat] = coord;
-                  const marcadorEtiqueta = L.marker([lat, lng], {
-                    icon: L.divIcon({
-                      className: 'etiqueta-seccion',
-                      html: seccion,
-                      iconSize: [24, 10],
-                      iconAnchor: [12, 5]
-                    }),
-                    interactive: false
-                  });
-                  grupoEtiquetas.addLayer(marcadorEtiqueta);
-
-                } catch (err) {
-                  const centroFallback = layer.getBounds().getCenter();
-                  const marcadorEtiqueta = L.marker([centroFallback.lat, centroFallback.lng], {
-                    icon: L.divIcon({
-                      className: 'etiqueta-seccion',
-                      html: seccion,
-                      iconSize: [24, 10],
-                      iconAnchor: [12, 5]
-                    }),
-                    interactive: false
-                  });
-                  grupoEtiquetas.addLayer(marcadorEtiqueta);
-                }
+                // Colocación de etiqueta con el algoritmo de punto interior seguro
+                const [latEtiqueta, lngEtiqueta] = obtenerPuntoInteriorSeccion(feature, layer);
+                const marcadorEtiqueta = L.marker([latEtiqueta, lngEtiqueta], {
+                  icon: L.divIcon({
+                    className: 'etiqueta-seccion',
+                    html: seccion,
+                    iconSize: [24, 10],
+                    iconAnchor: [12, 5]
+                  }),
+                  interactive: false
+                });
+                grupoEtiquetas.addLayer(marcadorEtiqueta);
 
                 // Eventos interactivos hover y click
                 layer.on({
