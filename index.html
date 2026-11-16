@@ -17,6 +17,9 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
+  <!-- Turf.js para cálculo exacto de centroides interiores en polígonos -->
+  <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+
   <style>
     body, html {
       font-family: 'Inter', sans-serif;
@@ -28,25 +31,20 @@
       color: #0f172a;
     }
 
-    /* Etiquetas adaptadas para caber perfectamente en el polígono correspondiente */
+    /* Etiquetas limpias con halo de texto perfectamente centradas dentro de su polígono */
     .etiqueta-seccion {
-      background: rgba(255, 255, 255, 0.88) !important;
-      border: 1px solid rgba(15, 23, 42, 0.25) !important;
-      border-radius: 3px !important;
-      font-weight: 700 !important;
-      font-size: 9px !important;
-      color: #0f172a !important;
-      padding: 0px 2px !important;
+      background: transparent !important;
+      border: none !important;
       box-shadow: none !important;
+      font-weight: 800 !important;
+      font-size: 10px !important;
+      color: #0f172a !important;
+      text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.95), 
+                   -1px -1px 2px rgba(255, 255, 255, 0.95), 
+                   1px -1px 2px rgba(255, 255, 255, 0.95), 
+                   -1px 1px 2px rgba(255, 255, 255, 0.95) !important;
       text-align: center !important;
-      max-width: 38px !important;
-      overflow: hidden !important;
-      text-overflow: ellipsis !important;
       white-space: nowrap !important;
-    }
-
-    .etiqueta-seccion::before {
-      display: none !important;
     }
 
     /* Personalización de popups Leaflet */
@@ -362,6 +360,8 @@
     const layerSecD11 = L.layerGroup().addTo(map);
     const layerLimD15 = L.layerGroup().addTo(map);
     const layerSecD15 = L.layerGroup().addTo(map);
+    const layerEtiquetasD11 = L.layerGroup().addTo(map);
+    const layerEtiquetasD15 = L.layerGroup().addTo(map);
 
     const grupoLimitesTotales = L.featureGroup();
     let geoJsonLimD11 = null;
@@ -405,7 +405,7 @@
     // =========================================================================
     // CARGA DE ARCHIVOS GEOJSON
     // =========================================================================
-    async function cargarCapaGeoJSON(nombreArchivo, grupoDestino, tipo) {
+    async function cargarCapaGeoJSON(nombreArchivo, grupoDestino, grupoEtiquetas, tipo) {
       try {
         const respuesta = await fetch(encodeURI(nombreArchivo));
         if (!respuesta.ok) throw new Error(`HTTP ${respuesta.status}`);
@@ -461,12 +461,36 @@
                 `;
                 layer.bindPopup(htmlPopup);
 
-                // Etiqueta compacta en el centro del polígono
-                layer.bindTooltip(seccion, {
-                  permanent: true,
-                  direction: 'center',
-                  className: 'etiqueta-seccion'
-                });
+                // Cálculo exacto de punto interior garantizado usando Turf.js (evita que salga del polígono)
+                try {
+                  const puntoInterior = turf.pointOnFeature(feature);
+                  if (puntoInterior && puntoInterior.geometry && puntoInterior.geometry.coordinates) {
+                    const [lng, lat] = puntoInterior.geometry.coordinates;
+                    const marcadorEtiqueta = L.marker([lat, lng], {
+                      icon: L.divIcon({
+                        className: 'etiqueta-seccion',
+                        html: seccion,
+                        iconSize: [40, 16],
+                        iconAnchor: [20, 8]
+                      }),
+                      interactive: false
+                    });
+                    grupoEtiquetas.addLayer(marcadorEtiqueta);
+                  }
+                } catch (err) {
+                  // Fallback al centro de la capa si Turf.js falla por geometría
+                  const centroFallback = layer.getBounds().getCenter();
+                  const marcadorEtiqueta = L.marker([centroFallback.lat, centroFallback.lng], {
+                    icon: L.divIcon({
+                      className: 'etiqueta-seccion',
+                      html: seccion,
+                      iconSize: [40, 16],
+                      iconAnchor: [20, 8]
+                    }),
+                    interactive: false
+                  });
+                  grupoEtiquetas.addLayer(marcadorEtiqueta);
+                }
 
                 // Eventos interactivos hover y click
                 layer.on({
@@ -521,10 +545,10 @@
 
     // Cargar las 4 capas exactas del repositorio
     Promise.all([
-      cargarCapaGeoJSON('Distrito Local 11.geojson', layerLimD11, 'lim_11'),
-      cargarCapaGeoJSON('Distrito Local 11_Lista_Nominal_Padron.geojson', layerSecD11, 'sec_11'),
-      cargarCapaGeoJSON('Distrito Local 15.geojson', layerLimD15, 'lim_15'),
-      cargarCapaGeoJSON('Distrito Local 15_Lista_Nominal_Padron.geojson', layerSecD15, 'sec_15')
+      cargarCapaGeoJSON('Distrito Local 11.geojson', layerLimD11, L.layerGroup(), 'lim_11'),
+      cargarCapaGeoJSON('Distrito Local 11_Lista_Nominal_Padron.geojson', layerSecD11, layerEtiquetasD11, 'sec_11'),
+      cargarCapaGeoJSON('Distrito Local 15.geojson', layerLimD15, L.layerGroup(), 'lim_15'),
+      cargarCapaGeoJSON('Distrito Local 15_Lista_Nominal_Padron.geojson', layerSecD15, layerEtiquetasD15, 'sec_15')
     ]);
 
     // =========================================================================
@@ -617,24 +641,30 @@
       if (dist === 'TODOS') {
         if (!map.hasLayer(layerLimD11)) map.addLayer(layerLimD11);
         if (!map.hasLayer(layerSecD11)) map.addLayer(layerSecD11);
+        if (!map.hasLayer(layerEtiquetasD11)) map.addLayer(layerEtiquetasD11);
         if (!map.hasLayer(layerLimD15)) map.addLayer(layerLimD15);
         if (!map.hasLayer(layerSecD15)) map.addLayer(layerSecD15);
+        if (!map.hasLayer(layerEtiquetasD15)) map.addLayer(layerEtiquetasD15);
         if (grupoLimitesTotales.getLayers().length > 0) {
           map.fitBounds(grupoLimitesTotales.getBounds(), { padding: [30, 30] });
         }
       } else if (dist === '11') {
         if (!map.hasLayer(layerLimD11)) map.addLayer(layerLimD11);
         if (!map.hasLayer(layerSecD11)) map.addLayer(layerSecD11);
+        if (!map.hasLayer(layerEtiquetasD11)) map.addLayer(layerEtiquetasD11);
         if (map.hasLayer(layerLimD15)) map.removeLayer(layerLimD15);
         if (map.hasLayer(layerSecD15)) map.removeLayer(layerSecD15);
+        if (map.hasLayer(layerEtiquetasD15)) map.removeLayer(layerEtiquetasD15);
         if (geoJsonLimD11) {
           map.fitBounds(geoJsonLimD11.getBounds(), { padding: [30, 30] });
         }
       } else if (dist === '15') {
         if (map.hasLayer(layerLimD11)) map.removeLayer(layerLimD11);
         if (map.hasLayer(layerSecD11)) map.removeLayer(layerSecD11);
+        if (map.hasLayer(layerEtiquetasD11)) map.removeLayer(layerEtiquetasD11);
         if (!map.hasLayer(layerLimD15)) map.addLayer(layerLimD15);
         if (!map.hasLayer(layerSecD15)) map.addLayer(layerSecD15);
+        if (!map.hasLayer(layerEtiquetasD15)) map.addLayer(layerEtiquetasD15);
         if (geoJsonLimD15) {
           map.fitBounds(geoJsonLimD15.getBounds(), { padding: [30, 30] });
         }
@@ -663,8 +693,10 @@
 
       if (info.distrito === '11') {
         if (!map.hasLayer(layerSecD11)) map.addLayer(layerSecD11);
+        if (!map.hasLayer(layerEtiquetasD11)) map.addLayer(layerEtiquetasD11);
       } else {
         if (!map.hasLayer(layerSecD15)) map.addLayer(layerSecD15);
+        if (!map.hasLayer(layerEtiquetasD15)) map.addLayer(layerEtiquetasD15);
       }
 
       document.getElementById('selectSeccion').value = info.seccion;
