@@ -37,12 +37,12 @@
       border: none !important;
       box-shadow: none !important;
       font-weight: 800 !important;
-      font-size: 8px !important;
+      font-size: 7px !important;
       color: #0f172a !important;
-      text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.95), 
-                   -1px -1px 2px rgba(255, 255, 255, 0.95), 
-                   1px -1px 2px rgba(255, 255, 255, 0.95), 
-                   -1px 1px 2px rgba(255, 255, 255, 0.95) !important;
+      text-shadow: 1px 1px 1.5px rgba(255, 255, 255, 0.95), 
+                   -1px -1px 1.5px rgba(255, 255, 255, 0.95), 
+                   1px -1px 1.5px rgba(255, 255, 255, 0.95), 
+                   -1px 1px 1.5px rgba(255, 255, 255, 0.95) !important;
       padding: 0 !important;
       text-align: center !important;
       white-space: nowrap !important;
@@ -408,13 +408,13 @@
     }
 
     // =========================================================================
-    // CÁLCULO SEGURO DE PUNTO INTERIOR PARA POLÍGONOS Y MULTIPOLÍGONOS
+    // CÁLCULO ESTRICTO DE CENTROIDE INTERIOR PARA POLÍGONOS Y MULTIPOLÍGONOS
     // =========================================================================
     function obtenerPuntoInteriorSeccion(feature, layer) {
       try {
         let polyTarget = feature;
 
-        // Si es MultiPolygon, aislar el polígono principal de mayor área
+        // Si es MultiPolygon, descomponer y aislar el sub-polígono con mayor área de superficie
         if (feature.geometry && feature.geometry.type === 'MultiPolygon') {
           let mayorArea = -1;
           let mejorCoords = null;
@@ -433,15 +433,30 @@
 
         let coord = null;
 
-        // 1. Intentar centro de masa en el polígono principal
-        const com = turf.centerOfMass(polyTarget);
-        if (com && com.geometry && com.geometry.coordinates) {
-          if (turf.booleanPointInPolygon(com, polyTarget)) {
-            coord = com.geometry.coordinates;
+        // 1. Intentar aplicar un buffer negativo interno para alejar la etiqueta del contorno
+        try {
+          const buffered = turf.buffer(polyTarget, -0.00012, { units: 'degrees' });
+          if (buffered && buffered.geometry) {
+            const comBuff = turf.centerOfMass(buffered);
+            if (comBuff && comBuff.geometry && comBuff.geometry.coordinates) {
+              if (turf.booleanPointInPolygon(comBuff, polyTarget)) {
+                coord = comBuff.geometry.coordinates;
+              }
+            }
+          }
+        } catch (e) {}
+
+        // 2. Si el buffer no arroja punto, calcular centro de masa puro validando pertenencia
+        if (!coord) {
+          const com = turf.centerOfMass(polyTarget);
+          if (com && com.geometry && com.geometry.coordinates) {
+            if (turf.booleanPointInPolygon(com, polyTarget)) {
+              coord = com.geometry.coordinates;
+            }
           }
         }
 
-        // 2. Si no es válido, usar pointOnFeature
+        // 3. Respaldo por pointOnFeature interno
         if (!coord) {
           const pof = turf.pointOnFeature(polyTarget);
           if (pof && pof.geometry && pof.geometry.coordinates) {
@@ -451,13 +466,13 @@
           }
         }
 
-        // 3. Respaldo definitivo al centro de la capa Leaflet
+        // 4. Respaldo final con el centroide de la capa Leaflet
         if (!coord) {
           const c = layer.getBounds().getCenter();
           coord = [c.lng, c.lat];
         }
 
-        return [coord[1], coord[0]]; // [lat, lng]
+        return [coord[1], coord[0]]; // Retorna [lat, lng]
       } catch (err) {
         const c = layer.getBounds().getCenter();
         return [c.lat, c.lng];
@@ -523,14 +538,14 @@
                 `;
                 layer.bindPopup(htmlPopup);
 
-                // Colocación de etiqueta con el algoritmo de punto interior seguro
+                // Colocación ultrasegura de la etiqueta en el interior profundo
                 const [latEtiqueta, lngEtiqueta] = obtenerPuntoInteriorSeccion(feature, layer);
                 const marcadorEtiqueta = L.marker([latEtiqueta, lngEtiqueta], {
                   icon: L.divIcon({
                     className: 'etiqueta-seccion',
                     html: seccion,
-                    iconSize: [24, 10],
-                    iconAnchor: [12, 5]
+                    iconSize: [20, 8],
+                    iconAnchor: [10, 4]
                   }),
                   interactive: false
                 });
