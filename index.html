@@ -1,1045 +1,933 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Mapa Electoral - Iztacalco</title>
+  <title>Visor Electoral - Padrón y Lista Nominal</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Tipografía Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 
   <!-- Leaflet CSS & JS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  <!-- Turf.js para análisis espacial (Punto en Polígono) -->
-  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
-
-  <!-- Supabase JS Client -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-  <!-- Tesseract OCR para lectura de INE -->
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-
-  <!-- Librería para convertir formatos HEIC/HEIF (iPhone) a JPEG -->
-  <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
-
-  <!-- Cropper.js (Para recortar, rotar y enderezar la INE) -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
-
   <style>
-    body, html { margin: 0; padding: 0; height: 100%; width: 100%; font-family: sans-serif; background: #f8f9fa; }
-    #map { height: 100vh; width: 100%; }
-    
-    /* Contenedor del Buscador Estilo Google Maps con Lista Desplegable */
-    .search-box-wrapper {
-      position: absolute; top: 15px; left: 60px; z-index: 1000;
-      max-width: 440px; width: calc(100% - 80px);
-    }
-    .search-box-container {
-      background: white; padding: 6px 8px; border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.25); display: flex; gap: 6px; align-items: center;
-    }
-    .search-box-container input {
-      flex: 1; padding: 10px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; outline: none;
-    }
-    .search-box-container input:focus { border-color: #007bff; }
-    .search-box-container button {
-      background: #007bff; color: white; border: none; padding: 10px 14px;
-      border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 13px; white-space: nowrap;
+    body, html {
+      font-family: 'Inter', sans-serif;
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      width: 100%;
+      background-color: #f1f5f9;
+      color: #0f172a;
     }
 
-    /* Lista desplegable de sugerencias */
-    .suggestions-list {
-      background: white; margin-top: 4px; border-radius: 8px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.2); max-height: 260px; overflow-y: auto;
-      display: none; list-style: none; padding: 0; border: 1px solid #ddd;
-    }
-    .suggestions-list li {
-      padding: 10px 14px; font-size: 13px; color: #333; cursor: pointer; border-bottom: 1px solid #eee;
-    }
-    .suggestions-list li:last-child { border-bottom: none; }
-    .suggestions-list li:hover { background-color: #f1f3f5; color: #007bff; }
-
-    .btn-gps {
-      position: absolute; bottom: 20px; right: 20px; z-index: 1000;
-      background: #007bff; color: white; border: none; padding: 12px 18px;
-      border-radius: 50px; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-      cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 14px;
-    }
-
-    .btn-tabla-flotante {
-      position: absolute; bottom: 20px; left: 20px; z-index: 1000;
-      background: #343a40; color: white; border: none; padding: 12px 18px;
-      border-radius: 50px; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-      cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 14px;
-    }
-
-    .btn-registrar-aqui {
-      background: #28a745; color: white; border: none; padding: 8px 12px;
-      border-radius: 6px; font-weight: bold; font-size: 13px; cursor: pointer;
-      margin-top: 6px; width: 100%; text-align: center; display: inline-block;
-    }
-    
-    .modal {
-      display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%;
-      background-color: rgba(0,0,0,0.6); justify-content: center; align-items: flex-end;
-    }
-    .modal-content {
-      background: white; width: 100%; max-width: 750px; max-height: 88vh; overflow-y: auto;
-      padding: 20px; border-radius: 16px 16px 0 0; box-sizing: border-box; animation: slideUp 0.25s ease-out;
-    }
-    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-    
-    .form-group { margin-bottom: 12px; }
-    .form-group label { display: block; font-size: 13px; font-weight: bold; margin-bottom: 4px; color: #333; }
-    .form-group input, .form-group select, .form-group textarea {
-      width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 14px;
-    }
-    .form-group input:focus { border-color: #007bff; outline: none; }
-    .error-msg { color: #dc3545; font-size: 12px; margin-top: 3px; display: none; }
-
-    .btn-submit { background: #28a745; color: white; width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; margin-top: 10px; cursor: pointer; }
-    .btn-close { background: #6c757d; color: white; width: 100%; padding: 10px; border: none; border-radius: 8px; margin-top: 8px; font-weight: bold; cursor: pointer; }
-    .btn-ocr { background: #17a2b8; color: white; border: none; padding: 10px 12px; border-radius: 6px; font-size: 13px; margin-top: 4px; cursor: pointer; display: inline-block; font-weight: bold; }
-    .btn-export { background: #17a2b8; color: white; border: none; padding: 8px 14px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 13px; margin-bottom: 12px; }
-
-    .loading-status { font-size: 12px; color: #007bff; font-weight: bold; margin-top: 4px; display: none; }
-
+    /* Etiquetas permanentes de sección en el mapa */
     .etiqueta-seccion {
-      background: rgba(255, 255, 255, 0.75) !important;
-      border: 1px solid rgba(0, 0, 0, 0.4) !important;
-      border-radius: 3px !important;
-      font-weight: 600 !important;
-      font-size: 9px !important;
-      color: #222 !important;
-      padding: 0px 3px !important;
-      box-shadow: none !important;
+      background: rgba(255, 255, 255, 0.92) !important;
+      border: 1px solid rgba(15, 23, 42, 0.35) !important;
+      border-radius: 4px !important;
+      font-weight: 700 !important;
+      font-size: 10px !important;
+      color: #0f172a !important;
+      padding: 1px 4px !important;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15) !important;
+      white-space: nowrap !important;
     }
 
-    .kpi-container { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
-    .kpi-card { flex: 1; min-width: 110px; background: #eef2f7; padding: 12px; border-radius: 8px; text-align: center; }
-    .kpi-card h4 { margin: 0; font-size: 11px; color: #555; text-transform: uppercase; }
-    .kpi-card p { margin: 4px 0 0 0; font-size: 20px; font-weight: bold; color: #007bff; }
-
-    .tabla-registros { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; }
-    .tabla-registros th, .tabla-registros td { border: 1px solid #dee2e6; padding: 8px; text-align: left; }
-    .tabla-registros th { background-color: #f1f3f5; font-weight: bold; }
-    .badge-simpa { background: #28a745; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
-    .badge-nosimpa { background: #ffc107; color: #222; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
-
-    #modalNip {
-      display: flex; position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%;
-      background-color: rgba(0,0,0,0.85); justify-content: center; align-items: center;
-    }
-    .nip-box {
-      background: white; width: 90%; max-width: 380px; padding: 25px; border-radius: 12px; text-align: center; box-shadow: 0 5px 20px rgba(0,0,0,0.4);
-    }
-    .input-password-group {
-      position: relative; display: flex; align-items: center; margin-top: 15px; margin-bottom: 15px;
-    }
-    .input-password-group input {
-      width: 100%; padding: 12px 45px 12px 15px; font-size: 18px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; text-align: center; letter-spacing: 3px;
-    }
-    .btn-toggle-eye {
-      position: absolute; right: 10px; background: none; border: none; cursor: pointer; font-size: 20px; color: #666; padding: 5px;
-    }
-    .btn-entrar-nip {
-      background: #007bff; color: white; width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer;
+    .etiqueta-seccion::before {
+      display: none !important;
     }
 
-    #modalCropper {
-      display: none; position: fixed; z-index: 3000; left: 0; top: 0; width: 100%; height: 100%;
-      background-color: rgba(0,0,0,0.9); flex-direction: column; justify-content: center; align-items: center;
+    /* Personalización de popups Leaflet */
+    .leaflet-popup-content-wrapper {
+      border-radius: 10px;
+      box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.2);
+      padding: 2px;
     }
-    .cropper-container-box {
-      width: 95%; max-width: 600px; height: 60vh; background: #000; margin-bottom: 15px; border-radius: 8px; overflow: hidden;
+    .leaflet-popup-content {
+      margin: 12px 14px;
+      font-family: 'Inter', sans-serif;
     }
-    .cropper-toolbar {
-      display: flex; gap: 10px; width: 95%; max-width: 600px; justify-content: center; flex-wrap: wrap;
+
+    /* Scrollbar discreto */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
     }
-    .btn-crop-action {
-      background: #17a2b8; color: white; border: none; padding: 10px 14px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px; flex: 1; min-width: 90px;
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
     }
-    .btn-crop-confirm { background: #28a745; color: white; border: none; padding: 10px 14px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px; flex: 2; }
-    .btn-crop-cancel { background: #dc3545; color: white; border: none; padding: 10px 14px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px; flex: 1; }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    /* Estilos de impresión para el reporte oficial */
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      #modalReporte, #modalReporte * {
+        visibility: visible;
+      }
+      #modalReporte {
+        position: static !important;
+        background: white !important;
+        padding: 0 !important;
+        overflow: visible !important;
+      }
+      #modalReporteContent {
+        box-shadow: none !important;
+        max-height: none !important;
+        overflow: visible !important;
+        width: 100% !important;
+        max-width: 100% !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+    }
   </style>
-
-  <!-- Carga de API Geocoding de Google si cuentas con Key, o usa la alternativa precisa -->
 </head>
-<body>
+<body class="flex flex-col h-screen overflow-hidden">
 
-  <!-- Modal de Seguridad / NIP -->
-  <div id="modalNip">
-    <div class="nip-box">
-      <h3 style="margin-top:0; color:#333;">🔒 Acceso Restringido</h3>
-      <p style="font-size: 13px; color: #666;">Ingresa la clave/NIP autorizada de la brigada para continuar:</p>
-      
-      <div class="input-password-group">
-        <input type="password" id="inputNip" placeholder="••••" maxlength="10" onkeypress="if(event.key === 'Enter') validarNip()">
-        <button type="button" class="btn-toggle-eye" id="btnOjo" onclick="togglePasswordVisibilidad()">👁️</button>
+  <!-- Encabezado Institucional Oscuro -->
+  <header class="bg-slate-900 text-white px-4 py-3 shadow-md flex items-center justify-between z-30 border-b border-slate-800 shrink-0">
+    <div class="flex items-center gap-3">
+      <!-- Botón toggle menú móvil -->
+      <button id="btnToggleSidebar" onclick="toggleSidebarMobile()" class="lg:hidden bg-slate-800 hover:bg-slate-700 text-white p-2 rounded-lg border border-slate-700 transition" aria-label="Alternar panel lateral">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+
+      <div class="bg-amber-500/15 border border-amber-400/30 p-2 rounded-lg text-amber-400 hidden sm:flex">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+        </svg>
       </div>
 
-      <button class="btn-entrar-nip" onclick="validarNip()">Ingresar</button>
+      <div>
+        <h1 class="text-base sm:text-lg font-bold tracking-tight text-white leading-tight">
+          Visor Electoral · Padrón y Lista Nominal
+        </h1>
+        <p class="text-xs text-slate-400">
+          Consulta cartográfica y reporte por Distrito Local y Sección Electoral
+        </p>
+      </div>
     </div>
+
+    <div class="flex items-center gap-2">
+      <span id="badgeEstadoCapas" class="hidden md:inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        Distritos Locales 11 y 15
+      </span>
+    </div>
+  </header>
+
+  <!-- Contenedor Principal: Sidebar + Mapa -->
+  <div class="flex flex-1 overflow-hidden relative">
+
+    <!-- Barra Lateral Izquierda (Sidebar) -->
+    <aside id="sidebarPanel" class="w-full sm:w-[370px] bg-white border-r border-slate-200 flex flex-col h-full z-20 absolute lg:static inset-y-0 left-0 transform transition-transform duration-300 ease-in-out shadow-xl lg:shadow-none">
+      
+      <div class="p-4 overflow-y-auto flex-1 space-y-5">
+
+        <!-- Aviso en caso de error de carga local (file://) -->
+        <div id="alertaCarga" class="hidden bg-amber-50 border border-amber-300 text-amber-900 rounded-lg p-3 text-xs space-y-1">
+          <p class="font-bold">⚠️ No se pudieron leer los archivos GeoJSON</p>
+          <p>Asegúrate de abrir este visor desde GitHub Pages o un servidor web local junto a las 4 capas <code class="bg-amber-100 px-1 rounded">.geojson</code>.</p>
+        </div>
+
+        <!-- Bloque 1: Filtrar por -->
+        <section class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-3">
+          <div class="flex items-center justify-between">
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700">Filtrar por</h2>
+            <button onclick="restablecerVista()" class="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition cursor-pointer">
+              ↺ Restablecer vista
+            </button>
+          </div>
+
+          <div class="space-y-2.5">
+            <div>
+              <label for="selectDistrito" class="block text-xs font-medium text-slate-600 mb-1">Distrito Local</label>
+              <select id="selectDistrito" onchange="alCambiarDistrito()" class="w-full bg-white border border-slate-300 text-slate-800 text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <option value="TODOS">Todos los Distritos (11 y 15)</option>
+                <option value="11">Distrito Local 11</option>
+                <option value="15">Distrito Local 15</option>
+              </select>
+            </div>
+
+            <div>
+              <label for="selectSeccion" class="block text-xs font-medium text-slate-600 mb-1">Sección Electoral</label>
+              <select id="selectSeccion" onchange="alCambiarSeccion()" class="w-full bg-white border border-slate-300 text-slate-800 text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <option value="">Todas las secciones del filtro...</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <!-- Bloque 2: Capas en el mapa -->
+        <section class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2.5">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700">Capas en el mapa</h2>
+
+          <div class="space-y-2 text-xs text-slate-700">
+            <label class="flex items-center gap-2.5 cursor-pointer select-none">
+              <input type="checkbox" id="chkLimD11" checked onchange="actualizarVisibilidadCapas()" class="rounded border-slate-300 text-amber-600 focus:ring-amber-500 w-4 h-4" />
+              <span class="w-3 h-0.5 border-t-2 border-dashed border-amber-700 inline-block"></span>
+              <span>Límite Distrito Local 11</span>
+            </label>
+
+            <label class="flex items-center gap-2.5 cursor-pointer select-none">
+              <input type="checkbox" id="chkSecD11" checked onchange="actualizarVisibilidadCapas()" class="rounded border-slate-300 text-amber-600 focus:ring-amber-500 w-4 h-4" />
+              <span class="w-3 h-3 rounded-sm bg-amber-500/40 border border-amber-700 inline-block"></span>
+              <span>Secciones Distrito Local 11</span>
+            </label>
+
+            <label class="flex items-center gap-2.5 cursor-pointer select-none">
+              <input type="checkbox" id="chkLimD15" checked onchange="actualizarVisibilidadCapas()" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4" />
+              <span class="w-3 h-0.5 border-t-2 border-dashed border-blue-700 inline-block"></span>
+              <span>Límite Distrito Local 15</span>
+            </label>
+
+            <label class="flex items-center gap-2.5 cursor-pointer select-none">
+              <input type="checkbox" id="chkSecD15" checked onchange="actualizarVisibilidadCapas()" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4" />
+              <span class="w-3 h-3 rounded-sm bg-blue-500/40 border border-blue-700 inline-block"></span>
+              <span>Secciones Distrito Local 15</span>
+            </label>
+
+            <div class="pt-1 border-t border-slate-200">
+              <label class="flex items-center gap-2.5 cursor-pointer select-none">
+                <input type="checkbox" id="chkEtiquetas" checked onchange="actualizarEtiquetasZoom()" class="rounded border-slate-300 text-slate-800 focus:ring-slate-500 w-4 h-4" />
+                <span class="font-medium">Etiquetas de número de sección</span>
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <!-- Bloque 3: Reporte por Distrito -->
+        <section class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2.5">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700">Reporte por Distrito</h2>
+
+          <button onclick="abrirModalReporte()" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs py-2.5 px-3 rounded-lg shadow-sm transition flex items-center justify-center gap-2 cursor-pointer">
+            <span>📄 Vista Previa / Imprimir Reporte</span>
+          </button>
+
+          <button onclick="descargarCSVPorDistrito()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs py-2.5 px-3 rounded-lg shadow-sm transition flex items-center justify-center gap-2 cursor-pointer">
+            <span>📥 Descargar CSV por Distrito</span>
+          </button>
+        </section>
+
+        <!-- Bloque 4: Detalle por sección -->
+        <section class="bg-white border border-slate-200 rounded-xl overflow-hidden flex flex-col">
+          <div class="bg-slate-100 px-3.5 py-2 border-b border-slate-200 flex items-center justify-between">
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700">Detalle por sección</h2>
+            <span id="contadorTablaSidebar" class="text-[11px] font-semibold bg-white text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">0</span>
+          </div>
+
+          <div class="overflow-y-auto max-h-64">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead class="bg-slate-50 text-slate-600 sticky top-0 border-b border-slate-200">
+                <tr>
+                  <th class="py-2 px-2.5 font-semibold">Dist.</th>
+                  <th class="py-2 px-2 font-semibold">Sección</th>
+                  <th class="py-2 px-2.5 font-semibold text-right">Padrón</th>
+                  <th class="py-2 px-2.5 font-semibold text-right">Lista Nom.</th>
+                </tr>
+              </thead>
+              <tbody id="tbodySidebarSecciones" class="divide-y divide-slate-100 text-slate-700">
+                <tr>
+                  <td colspan="4" class="py-4 text-center text-slate-400">Cargando secciones...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+      </div>
+    </aside>
+
+    <!-- Área Principal del Mapa -->
+    <main class="flex-1 relative h-full w-full">
+      <div id="map" class="h-full w-full z-10"></div>
+
+      <!-- Tarjetas KPI Flotantes Superiores -->
+      <div class="absolute top-3 left-3 right-14 z-20 pointer-events-none">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 max-w-4xl">
+          <div class="bg-white/95 backdrop-blur-sm border border-slate-200/90 rounded-xl p-2.5 sm:p-3 shadow-md pointer-events-auto">
+            <p class="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500">Total Secciones</p>
+            <p id="kpiTotalSecciones" class="text-base sm:text-xl font-extrabold text-slate-900 mt-0.5">0</p>
+          </div>
+
+          <div class="bg-white/95 backdrop-blur-sm border border-slate-200/90 rounded-xl p-2.5 sm:p-3 shadow-md pointer-events-auto">
+            <p class="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500">Padrón Electoral Total</p>
+            <p id="kpiPadronTotal" class="text-base sm:text-xl font-extrabold text-amber-600 mt-0.5">0</p>
+          </div>
+
+          <div class="bg-white/95 backdrop-blur-sm border border-slate-200/90 rounded-xl p-2.5 sm:p-3 shadow-md pointer-events-auto">
+            <p class="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500">Lista Nominal Total</p>
+            <p id="kpiNominalTotal" class="text-base sm:text-xl font-extrabold text-emerald-600 mt-0.5">0</p>
+          </div>
+
+          <div class="bg-white/95 backdrop-blur-sm border border-slate-200/90 rounded-xl p-2.5 sm:p-3 shadow-md pointer-events-auto">
+            <p class="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500">% Cobertura (LN/Padrón)</p>
+            <p id="kpiCoberturaTotal" class="text-base sm:text-xl font-extrabold text-blue-600 mt-0.5">0.00%</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Indicador Flotante de Coordenadas (Inferior Izquierda) -->
+      <div class="hidden sm:flex items-center gap-2 bg-slate-900/90 text-slate-200 text-[11px] font-mono px-3 py-1.5 rounded-lg shadow-md absolute bottom-4 left-4 z-20 border border-slate-700">
+        <span class="text-slate-400">COORD:</span>
+        <span id="coordDisplay">19.39500 · -99.09500</span>
+      </div>
+
+      <!-- Leyenda Cartográfica Flotante (Inferior Derecha) -->
+      <div class="bg-white/95 backdrop-blur-sm border border-slate-200 rounded-xl p-3 shadow-md absolute bottom-6 right-3 z-20 text-xs space-y-1.5">
+        <p class="font-bold text-slate-800 text-[11px] uppercase tracking-wider border-b border-slate-100 pb-1">Simbología</p>
+        <div class="flex items-center gap-2 text-slate-700">
+          <span class="w-3.5 h-3.5 rounded-sm bg-amber-500/35 border-2 border-amber-700 inline-block"></span>
+          <span>Distrito Local 11</span>
+        </div>
+        <div class="flex items-center gap-2 text-slate-700">
+          <span class="w-3.5 h-3.5 rounded-sm bg-blue-500/35 border-2 border-blue-700 inline-block"></span>
+          <span>Distrito Local 15</span>
+        </div>
+      </div>
+    </main>
+
   </div>
 
-  <!-- Buscador Avanzado con Motor Híbrido (Google API + Fallback Preciso) -->
-  <div class="search-box-wrapper">
-    <div class="search-box-container">
-      <input type="text" id="inputBusquedaDireccion" placeholder="Buscar dirección (ej: Sur 119 2251)..." autocomplete="off" oninput="buscarSugerenciasEnTiempoReal()" onkeypress="if(event.key === 'Enter') buscarUbicacionesYMostrarOpciones()">
-      <button onclick="buscarUbicacionesYMostrarOpciones()">🔍 Buscar</button>
-    </div>
-    <ul id="listaSugerencias" class="suggestions-list"></ul>
-  </div>
-
-  <div id="map"></div>
-  <button class="btn-gps" onclick="centrarGPS()">📍 Mi Ubicación</button>
-  <button class="btn-tabla-flotante" onclick="abrirModalTabla()">📊 Ver Registros</button>
-
-  <!-- Modal Captura Completa -->
-  <div id="modalForm" class="modal">
-    <div class="modal-content">
-      <h3 style="margin-top:0;">Registrar Visita de Casa</h3>
+  <!-- Modal Vista Previa / Imprimir Reporte por Distrito -->
+  <div id="modalReporte" class="hidden fixed inset-0 bg-slate-900/70 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-6">
+    <div id="modalReporteContent" class="bg-white w-full max-w-4xl max-h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-200">
       
-      <div class="form-group">
-        <label>Nombre del Brigadista *</label>
-        <input type="text" id="brigadista" placeholder="Nombre de quien visita">
+      <!-- Cabecera Modal -->
+      <div class="bg-slate-900 text-white px-5 py-4 flex flex-wrap items-center justify-between gap-3 shrink-0">
+        <div>
+          <h3 class="text-base sm:text-lg font-bold">Reporte Electoral por Distrito Local y Sección</h3>
+          <p id="subtituloReporteModal" class="text-xs text-slate-300">Padrón Electoral y Lista Nominal — Distritos Locales 11 y 15</p>
+        </div>
+
+        <div class="flex items-center gap-2 no-print">
+          <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3.5 py-2 rounded-lg transition cursor-pointer flex items-center gap-1.5">
+            🖨️ Imprimir / Guardar PDF
+          </button>
+          <button onclick="descargarCSVPorDistrito()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3.5 py-2 rounded-lg transition cursor-pointer flex items-center gap-1.5">
+            📥 Exportar CSV
+          </button>
+          <button onclick="cerrarModalReporte()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold px-3 py-2 rounded-lg transition cursor-pointer">
+            ✕ Cerrar
+          </button>
+        </div>
       </div>
 
-      <div class="form-group">
-        <label>Nombre del Ciudadano / Contacto</label>
-        <input type="text" id="nombre_persona" placeholder="Nombre completo (o 'No proporcionado')">
-      </div>
+      <!-- Cuerpo Desplazable del Reporte -->
+      <div class="p-5 overflow-y-auto space-y-6 text-sm">
 
-      <div class="form-group">
-        <label>Teléfono (10 dígitos)</label>
-        <input type="tel" id="telefono" maxlength="10" placeholder="Ej: 5512345678" oninput="validarTelefono()">
-        <span id="tel-error" class="error-msg">El teléfono debe contener exactamente 10 dígitos numéricos.</span>
-      </div>
-
-      <div class="form-group" style="background:#e8f8f5; padding:10px; border-radius:8px; border:1px solid #a3e4d7;">
-        <label style="color:#117a65;">🗳 Sección Electoral (4 dígitos)</label>
-        <input type="text" id="seccion_electoral" placeholder="Se llena automáticamente con Búsqueda u OCR" style="background:#fff; font-weight:bold; color:#117a65;">
-      </div>
-
-      <div class="form-group" style="background:#eef6ff; padding:10px; border-radius:8px; border:1px solid #b6d4fe;">
-        <label style="color:#084298;">🆔 Código OCR (13 Dígitos)</label>
-        <input type="text" id="ocr_resultado" placeholder="Se llena automáticamente al escanear el Reverso" style="background:#fff; font-weight:bold; color:#0d6efd;">
-      </div>
-
-      <div style="background:#f8f9fa; border:1px solid #ced4da; padding:12px; border-radius:10px; margin-bottom:15px;">
-        <h4 style="margin:0 0 10px 0; font-size:14px; color:#495057;">📷 Carga de Credencial</h4>
-        
-        <div class="form-group" style="margin-bottom:10px;">
-          <label>1. Fotografía del Frente de INE</label>
-          <input type="file" id="foto_ine_frente" accept="image/*" onchange="procesarFotoFrente(event)">
-          <div id="status-frente" class="loading-status">⏳ Procesando imagen...</div>
-          <div id="preview-container-frente" style="display:none; margin-top:6px; text-align:center;">
-            <img id="preview-img-frente" src="" alt="Vista previa frente" style="max-width:100%; max-height:120px; border-radius:6px; border: 1px solid #ddd;">
+        <!-- Tabla 1: Resumen Consolidado por Distrito Local -->
+        <div>
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700 mb-2 border-l-4 border-slate-900 pl-2.5">
+            1. Resumen Consolidado por Distrito Electoral
+          </h4>
+          <div class="overflow-x-auto border border-slate-200 rounded-xl">
+            <table class="w-full border-collapse text-xs sm:text-sm">
+              <thead class="bg-slate-100 text-slate-700 border-b border-slate-200">
+                <tr>
+                  <th class="py-2.5 px-3 text-left font-bold">Distrito Local</th>
+                  <th class="py-2.5 px-3 text-center font-bold">Total Secciones</th>
+                  <th class="py-2.5 px-3 text-right font-bold">Padrón Electoral Total</th>
+                  <th class="py-2.5 px-3 text-right font-bold">Lista Nominal Total</th>
+                  <th class="py-2.5 px-3 text-right font-bold">% Cobertura (LN/Padrón)</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyReporteResumen" class="divide-y divide-slate-200"></tbody>
+            </table>
           </div>
         </div>
 
-        <div class="form-group" style="margin-bottom:12px;">
-          <label>2. Fotografía del Reverso de INE</label>
-          <input type="file" id="foto_ine_reverso" accept="image/*" onchange="procesarFotoReverso(event)">
-          <div id="status-reverso" class="loading-status">⏳ Procesando imagen...</div>
-          <div id="preview-container-reverso" style="display:none; margin-top:6px; text-align:center;">
-            <img id="preview-img-reverso" src="" alt="Vista previa reverso" style="max-width:100%; max-height:120px; border-radius:6px; border: 1px solid #ddd;">
+        <!-- Tabla 2: Desglose Detallado por Distrito y Sección -->
+        <div>
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700 mb-2 border-l-4 border-amber-600 pl-2.5">
+            2. Desglose por Sección Electoral
+          </h4>
+          <div class="overflow-x-auto border border-slate-200 rounded-xl">
+            <table class="w-full border-collapse text-xs">
+              <thead class="bg-slate-100 text-slate-700 border-b border-slate-200">
+                <tr>
+                  <th class="py-2.5 px-3 text-left font-bold">Distrito Local</th>
+                  <th class="py-2.5 px-3 text-center font-bold">Número de Sección</th>
+                  <th class="py-2.5 px-3 text-right font-bold">Padrón Electoral Total</th>
+                  <th class="py-2.5 px-3 text-right font-bold">Lista Nominal Total</th>
+                  <th class="py-2.5 px-3 text-right font-bold">% Cobertura</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyReporteDesglose" class="divide-y divide-slate-200"></tbody>
+            </table>
           </div>
         </div>
 
-        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
-          <button type="button" class="btn-ocr" style="flex:1; min-width:140px; background:#0d6efd;" onclick="extraerTextoReverso()">🔍 Escanear OCR y Sección (Reverso)</button>
-        </div>
       </div>
-     
-      <div class="form-group">
-        <label>¿Es Simpatizante?</label>
-        <select id="simpatizante">
-          <option value="true">Sí (Simpatizante)</option>
-          <option value="false">No / Indeciso</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label>¿Entregó copia / foto de INE?</label>
-        <select id="entrego_ine">
-          <option value="false">No</option>
-          <option value="true">Sí</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label>¿Registro en Plataforma?</label>
-        <select id="registro_plataforma" onchange="toggleRazonNoRegistro()">
-          <option value="true">Sí</option>
-          <option value="false">No</option>
-        </select>
-      </div>
-
-      <div class="form-group" id="group-razon" style="display: none;">
-        <label>¿Por qué no se registró en plataforma?</label>
-        <input type="text" id="razon_no_registro" placeholder="Ej: No tiene smartphone, desconfianza, etc.">
-      </div>
-
-      <div class="form-group">
-        <label>Dirección / Referencia de Casa</label>
-        <input type="text" id="direccion" placeholder="Calle, número exterior/interior">
-      </div>
-
-      <div class="form-group">
-        <label>Observaciones</label>
-        <textarea id="observaciones" rows="3" placeholder="Notas manuales del brigadista..."></textarea>
-      </div>
-
-      <input type="hidden" id="lat">
-      <input type="hidden" id="lng">
-
-      <button class="btn-submit" onclick="guardarRegistro()">Guardar Casa</button>
-      <button class="btn-close" onclick="cerrarModal()">Cancelar</button>
-    </div>
-  </div>
-
-  <!-- Modal Tabla y Resumen -->
-  <div id="modalTabla" class="modal">
-    <div class="modal-content">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-        <h3 style="margin:0;">📊 Resumen de Capturas en Campo</h3>
-        <button class="btn-export" onclick="descargarCSV()">📥 Exportar CSV</button>
-      </div>
-
-      <div class="kpi-container">
-        <div class="kpi-card">
-          <h4>Total Visitas</h4>
-          <p id="kpi-total">0</p>
-        </div>
-        <div class="kpi-card">
-          <h4>Simpatizantes</h4>
-          <p id="kpi-simpatizantes" style="color:#28a745;">0</p>
-        </div>
-        <div class="kpi-card">
-          <h4>INE Entregadas</h4>
-          <p id="kpi-ine" style="color:#17a2b8;">0</p>
-        </div>
-      </div>
-
-      <input type="text" id="buscadorTabla" placeholder="🔍 Buscar por brigadista, ciudadano, sección o dirección..." onkeyup="filtrarTabla()" style="width:100%; padding:8px; margin-bottom:10px; border:1px solid #ccc; border-radius:6px;">
-
-      <div style="overflow-x:auto;">
-        <table class="tabla-registros" id="tablaDatos">
-          <thead>
-            <tr>
-              <th>Brigadista</th>
-              <th>Contacto</th>
-              <th>Sección</th>
-              <th>Código OCR (13 dig)</th>
-              <th>Teléfono</th>
-              <th>Estatus</th>
-              <th>INE</th>
-              <th>Plataforma</th>
-              <th>Dirección</th>
-            </tr>
-          </thead>
-          <tbody id="cuerpoTabla"></tbody>
-        </table>
-      </div>
-
-      <button class="btn-close" onclick="cerrarModalTabla()">Cerrar</button>
-    </div>
-  </div>
-
-  <!-- Modal de Edición, Rotación y Recorte (Cropper.js) -->
-  <div id="modalCropper">
-    <h4 style="color:white; margin:10px 0;">✂️ Enderezar y Recortar Credencial</h4>
-    <p style="color:#ccc; font-size:12px; margin:0 0 10px 0; text-align:center;">Gira la imagen si está de lado o ajusta los bordes para eliminar el fondo.</p>
-    
-    <div class="cropper-container-box">
-      <img id="cropper-img" src="" style="max-width: 100%;">
-    </div>
-
-    <div class="cropper-toolbar">
-      <button class="btn-crop-action" onclick="rotarCropper(-90)">↺ -90°</button>
-      <button class="btn-crop-action" onclick="rotarCropper(90)">↻ +90°</button>
-      <button class="btn-crop-confirm" onclick="confirmarRecorte()">✅ Usar Imagen</button>
-      <button class="btn-crop-cancel" onclick="cerrarCropper()">✖️ Cancelar</button>
     </div>
   </div>
 
   <script>
-    const NIP_AUTORIZADO = "ALP_2026";
+    // =========================================================================
+    // INICIALIZACIÓN DEL MAPA LEAFLET
+    // =========================================================================
+    const map = L.map('map', {
+      zoomControl: false,
+      tap: true
+    }).setView([19.395, -99.095], 13);
 
-    // SI TIENES API KEY DE GOOGLE MAPS, INSERTA TU CLAVE AQUÍ PARA USAR BÚSQUEDA 100% GOOGLE:
-    const GOOGLE_API_KEY = ""; 
+    L.control.zoom({ position: 'topright' }).addTo(map);
 
-    function verificarAccesoAutomatico() {
-      let claveGuardada = localStorage.getItem("nip_brigada");
-      if (claveGuardada === NIP_AUTORIZADO) {
-        document.getElementById('modalNip').style.display = 'none';
-      }
-    }
-
-    function togglePasswordVisibilidad() {
-      const input = document.getElementById('inputNip');
-      const btnOjo = document.getElementById('btnOjo');
-      if (input.type === 'password') {
-        input.type = 'text';
-        btnOjo.innerText = '🙈';
-      } else {
-        input.type = 'password';
-        btnOjo.innerText = '👁';
-      }
-    }
-
-    function validarNip() {
-      const inputIngresado = document.getElementById('inputNip').value.trim();
-      if (inputIngresado === NIP_AUTORIZADO) {
-        localStorage.setItem("nip_brigada", NIP_AUTORIZADO);
-        document.getElementById('modalNip').style.display = 'none';
-      } else {
-        alert("❌ Clave incorrecta. Intenta de nuevo.");
-        document.getElementById('inputNip').value = '';
-        document.getElementById('inputNip').focus();
-      }
-    }
-
-    verificarAccesoAutomatico();
-
-    const SUPABASE_URL = 'https://yaewqbjqcmkfqhupyebg.supabase.co';
-    const SUPABASE_KEY = 'sb_publishable_iG_U5IfGmBx0_pWBancEjw_UkJJERlc'; 
-    
-    let _supabase = null;
-    try {
-      if (window.supabase) {
-        _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-      }
-    } catch (e) {
-      console.warn("Supabase no configurado:", e);
-    }
-
-    let registrosCargados = [];
-    let gpsMarker = null;
-
-    const map = L.map('map', { doubleClickZoom: false, tap: true }).setView([19.395, -99.095], 14);
-
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       maxZoom: 19,
-      attribution: '© OpenStreetMap'
+      attribution: '&copy; OpenStreetMap &copy; CARTO'
     }).addTo(map);
 
-    const coloresRutas = [
-      '#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', 
-      '#911eb4', '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', 
-      '#008080', '#e6beff', '#9a6324', '#fffac8', '#800000'
-    ];
+    // Grupos de capas
+    const layerLimD11 = L.layerGroup().addTo(map);
+    const layerSecD11 = L.layerGroup().addTo(map);
+    const layerLimD15 = L.layerGroup().addTo(map);
+    const layerSecD15 = L.layerGroup().addTo(map);
 
-    function obtenerColorRuta(numRuta) {
-      if (!numRuta) return '#3388ff';
-      const id = parseInt(numRuta.toString().replace(/\D/g, '')) || 0;
-      return coloresRutas[id % coloresRutas.length];
+    const grupoLimitesTotales = L.featureGroup();
+    let geoJsonLimD11 = null;
+    let geoJsonLimD15 = null;
+
+    // Almacenamiento estructurado de secciones
+    let listaSecciones = [];
+    let mapaCapasPorSeccion = {};
+    let seccionSeleccionadaActual = null;
+    let archivosFallidos = 0;
+
+    // Lectura segura de atributos del GeoJSON
+    function leerPadron(props) {
+      return Number(props['PADRÓN ELECTORAL TOTAL'] ?? props['PADRON ELECTORAL TOTAL'] ?? 0) || 0;
     }
 
-    const capaAlcaldia = L.layerGroup().addTo(map);
-    const capaD11_Limite = L.layerGroup().addTo(map);
-    const capaD11_Rutas = L.layerGroup().addTo(map);
-    const capaD11_Secciones = L.layerGroup().addTo(map);
-    const capaD15_Limite = L.layerGroup().addTo(map);
-    const capaD15_Rutas = L.layerGroup().addTo(map);
-    const capaD15_Secciones = L.layerGroup().addTo(map);
-    const capaCasas = L.layerGroup().addTo(map);
+    function leerListaNominal(props) {
+      return Number(props['LISTA NOMINAL TOTAL'] ?? 0) || 0;
+    }
 
-    const capasOverlay = {
-      "📍 Casas Registradas": capaCasas,
-      "🏙 Límite Alcaldía Iztacalco": capaAlcaldia,
-      "🏛 Distrito Local 11 (Límite)": capaD11_Limite,
-      "🔲 D11 - Rutas": capaD11_Rutas,
-      "📄 D11 - Secciones": capaD11_Secciones,
-      "🏛️ Distrito Local 15 (Límite)": capaD15_Limite,
-      "🔲 D15 - Rutas": capaD15_Rutas,
-      "📄 D15 - Secciones": capaD15_Secciones
-    };
-    L.control.layers(null, capasOverlay, { collapsed: false }).addTo(map);
+    function estiloBaseSeccion(distrito, seleccionada = false) {
+      const esD11 = String(distrito) === '11';
+      if (seleccionada) {
+        return {
+          color: '#0f172a',
+          weight: 3,
+          opacity: 1,
+          fillColor: esD11 ? '#f59e0b' : '#3b82f6',
+          fillOpacity: 0.55
+        };
+      }
+      return {
+        color: esD11 ? '#b45309' : '#1d4ed8',
+        weight: 1.3,
+        opacity: 0.85,
+        fillColor: esD11 ? '#d97706' : '#2563eb',
+        fillOpacity: 0.22
+      };
+    }
 
-    let seccionesFeaturesD11 = [];
-    let seccionesFeaturesD15 = [];
-    let rutasFeaturesD11 = [];
-    let rutasFeaturesD15 = [];
+    // =========================================================================
+    // CARGA DE ARCHIVOS GEOJSON
+    // =========================================================================
+    async function cargarCapaGeoJSON(nombreArchivo, grupoDestino, tipo) {
+      try {
+        const respuesta = await fetch(encodeURI(nombreArchivo));
+        if (!respuesta.ok) throw new Error(`HTTP ${respuesta.status}`);
+        const data = await respuesta.json();
 
-    function cargarGeoJSON(nombreArchivo, grupo, tipoCapa) {
-      fetch(encodeURIComponent(nombreArchivo))
-        .then(res => res.json())
-        .then(data => {
-          if (tipoCapa === 'secciones') {
-            if (nombreArchivo.includes('11')) seccionesFeaturesD11.push(...data.features);
-            if (nombreArchivo.includes('15')) seccionesFeaturesD15.push(...data.features);
-          }
-          if (tipoCapa === 'rutas') {
-            if (nombreArchivo.includes('11')) rutasFeaturesD11.push(...data.features);
-            if (nombreArchivo.includes('15')) rutasFeaturesD15.push(...data.features);
-          }
+        const capaLeaflet = L.geoJSON(data, {
+          style: function (feature) {
+            if (tipo === 'lim_11') {
+              return { color: '#b45309', weight: 3.5, dashArray: '6, 6', fill: false, opacity: 0.9 };
+            }
+            if (tipo === 'lim_15') {
+              return { color: '#1d4ed8', weight: 3.5, dashArray: '6, 6', fill: false, opacity: 0.9 };
+            }
+            const dist = feature.properties?.DISTRITO_L || (tipo === 'sec_11' ? '11' : '15');
+            return estiloBaseSeccion(dist, false);
+          },
+          onEachFeature: function (feature, layer) {
+            if (tipo === 'sec_11' || tipo === 'sec_15') {
+              const p = feature.properties || {};
+              const dist = String(p.DISTRITO_L || (tipo === 'sec_11' ? '11' : '15'));
+              const seccion = String(p.SECCION ?? '').trim();
+              const padron = leerPadron(p);
+              const nominal = leerListaNominal(p);
+              const cobertura = padron > 0 ? ((nominal / padron) * 100).toFixed(2) : '0.00';
 
-          const layer = L.geoJSON(data, {
-            style: function(feature) {
-              if (tipoCapa === 'alcaldia') return { color: '#000000', weight: 3.5, fill: false, opacity: 0.9 };
-              if (tipoCapa === 'limite_d11') return { color: '#d35400', weight: 3.5, dashArray: '6, 6', fillOpacity: 0.03 };
-              if (tipoCapa === 'limite_d15') return { color: '#2980b9', weight: 3.5, dashArray: '6, 6', fillOpacity: 0.03 };
-              if (tipoCapa === 'rutas') return { color: obtenerColorRuta(feature.properties.ruta || feature.properties.RUTA), weight: 3, opacity: 0.85, fillOpacity: 0.15 };
-              if (tipoCapa === 'secciones') return { color: '#444444', weight: 1.2, dashArray: '3', opacity: 0.7, fillOpacity: 0.05 };
-            },
-            onEachFeature: function (feature, l) {
-              const seccion = feature.properties.SECCION || feature.properties.seccion;
-              const ruta = feature.properties.ruta || feature.properties.RUTA;
-              let info = "";
-              if (seccion) info += `<b>Sección:</b> ${seccion}<br>`;
-              if (ruta) info += `<b>Ruta:</b> ${ruta}`;
-              if (info) l.bindPopup(info);
+              if (seccion) {
+                listaSecciones.push({
+                  distrito: dist,
+                  seccion: seccion,
+                  padron: padron,
+                  nominal: nominal,
+                  cobertura: cobertura,
+                  layer: layer
+                });
+                mapaCapasPorSeccion[seccion] = layer;
 
-              if (tipoCapa === 'secciones' && seccion) {
-                l.bindTooltip(`${seccion}`, { permanent: true, direction: 'center', className: 'etiqueta-seccion' });
+                // Popup con datos electorales
+                const htmlPopup = `
+                  <div class="min-w-[205px] text-xs space-y-1.5">
+                    <div class="flex items-center justify-between border-b border-slate-200 pb-1">
+                      <span class="font-extrabold text-sm text-slate-900">Sección ${seccion}</span>
+                      <span class="px-2 py-0.5 rounded-full font-bold text-[10px] ${dist === '11' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}">
+                        Distrito Local ${dist}
+                      </span>
+                    </div>
+                    <div class="flex justify-between pt-0.5">
+                      <span class="text-slate-500">Padrón Electoral Total:</span>
+                      <span class="font-bold text-amber-700">${padron.toLocaleString('es-MX')}</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-slate-500">Lista Nominal Total:</span>
+                      <span class="font-bold text-emerald-700">${nominal.toLocaleString('es-MX')}</span>
+                    </div>
+                    <div class="flex justify-between border-t border-slate-100 pt-1">
+                      <span class="text-slate-500">% Cobertura (LN/Padrón):</span>
+                      <span class="font-bold text-blue-700">${cobertura}%</span>
+                    </div>
+                  </div>
+                `;
+                layer.bindPopup(htmlPopup);
+
+                // Etiqueta de número de sección
+                layer.bindTooltip(seccion, {
+                  permanent: true,
+                  direction: 'center',
+                  className: 'etiqueta-seccion'
+                });
+
+                // Eventos interactivos hover y click
+                layer.on({
+                  mouseover: function (e) {
+                    if (seccionSeleccionadaActual !== seccion) {
+                      e.target.setStyle({
+                        weight: 2.5,
+                        fillOpacity: 0.42
+                      });
+                    }
+                  },
+                  mouseout: function (e) {
+                    if (seccionSeleccionadaActual !== seccion) {
+                      e.target.setStyle(estiloBaseSeccion(dist, false));
+                    }
+                  },
+                  click: function () {
+                    resaltarSeccion(seccion, false);
+                  }
+                });
               }
             }
-          });
-          grupo.addLayer(layer);
-        })
-        .catch(err => console.error("Error GeoJSON:", nombreArchivo, err));
+          }
+        });
+
+        grupoDestino.addLayer(capaLeaflet);
+
+        if (tipo === 'lim_11') {
+          geoJsonLimD11 = capaLeaflet;
+          grupoLimitesTotales.addLayer(capaLeaflet);
+        }
+        if (tipo === 'lim_15') {
+          geoJsonLimD15 = capaLeaflet;
+          grupoLimitesTotales.addLayer(capaLeaflet);
+        }
+
+        if (grupoLimitesTotales.getLayers().length > 0) {
+          map.fitBounds(grupoLimitesTotales.getBounds(), { padding: [30, 30] });
+        }
+
+        if (tipo === 'sec_11' || tipo === 'sec_15') {
+          ordenarYRefrescarInterfaz();
+        }
+      } catch (err) {
+        console.warn(`No se pudo cargar ${nombreArchivo}:`, err);
+        archivosFallidos++;
+        if (archivosFallidos >= 2) {
+          document.getElementById('alertaCarga').classList.remove('hidden');
+        }
+      }
     }
 
-    cargarGeoJSON('Alcaldía Iztacalco.geojson', capaAlcaldia, 'alcaldia');
-    cargarGeoJSON('Distrito Local 11.geojson', capaD11_Limite, 'limite_d11');
-    cargarGeoJSON('Distrito Local 11.-Rutas.geojson', capaD11_Rutas, 'rutas');
-    cargarGeoJSON('Distrito Local 11.-Secciones electorales.geojson', capaD11_Secciones, 'secciones');
-    cargarGeoJSON('Distrito Local 15.geojson', capaD15_Limite, 'limite_d15');
-    cargarGeoJSON('Distrito Local 15.-Rutas.geojson', capaD15_Rutas, 'rutas');
-    cargarGeoJSON('Distrito Local 15.-Secciones electorales.geojson', capaD15_Secciones, 'secciones');
+    // Cargar las 4 capas exactas del repositorio
+    Promise.all([
+      cargarCapaGeoJSON('Distrito Local 11.geojson', layerLimD11, 'lim_11'),
+      cargarCapaGeoJSON('Distrito Local 11_Lista_Nominal_Padron.geojson', layerSecD11, 'sec_11'),
+      cargarCapaGeoJSON('Distrito Local 15.geojson', layerLimD15, 'lim_15'),
+      cargarCapaGeoJSON('Distrito Local 15_Lista_Nominal_Padron.geojson', layerSecD15, 'sec_15')
+    ]).then(() => {
+      actualizarEtiquetasZoom();
+    });
 
     // =========================================================================
-    // GEOCONVERSIÓN CON DETECCIÓN DE NÚMERO EXTERIOR Y COORDENADAS
+    // ACTUALIZACIÓN DE FILTROS, TABLA LATERAL Y TARJETAS KPI
     // =========================================================================
-    let debounceTimer = null;
-
-    function esFormatoCoordenadas(texto) {
-      return /^\s*(-?\d+(\.\d+)?)\s*[,;\s]\s*(-?\d+(\.\d+)?)\s*$/.test(texto);
+    function ordenarYRefrescarInterfaz() {
+      listaSecciones.sort((a, b) => (Number(a.distrito) - Number(b.distrito)) || (Number(a.seccion) - Number(b.seccion)));
+      poblarSelectorSecciones();
+      renderizarTablaSidebar();
+      actualizarKPIs();
     }
 
-    function extraerCoordenadas(texto) {
-      const match = texto.match(/(-?\d+(\.\d+)?)\s*[,;\s]\s*(-?\d+(\.\d+)?)/);
-      return match ? { lat: parseFloat(match[1]), lon: parseFloat(match[3]) } : null;
-    }
-
-    function buscarSugerenciasEnTiempoReal() {
-      clearTimeout(debounceTimer);
-      const query = document.getElementById('inputBusquedaDireccion').value.trim();
-      const listContainer = document.getElementById('listaSugerencias');
-
-      if (esFormatoCoordenadas(query)) {
-        listContainer.style.display = 'none';
-        return;
-      }
-
-      if (query.length < 3) {
-        listContainer.style.display = 'none';
-        listContainer.innerHTML = '';
-        return;
-      }
-
-      debounceTimer = setTimeout(() => {
-        obtenerUbicacionesDireccion(query, (resultados) => {
-          mostrarListaSugerencias(resultados);
-        });
-      }, 350);
-    }
-
-    function buscarUbicacionesYMostrarOpciones() {
-      const query = document.getElementById('inputBusquedaDireccion').value.trim();
-      if (!query) {
-        alert("Ingresa una dirección o coordenadas.");
-        return;
-      }
-
-      if (esFormatoCoordenadas(query)) {
-        const coords = extraerCoordenadas(query);
-        if (coords) {
-          seleccionarUbicacion(coords.lat, coords.lon, `Coordenadas: ${coords.lat.toFixed(5)}, ${coords.lon.toFixed(5)}`);
-          return;
-        }
-      }
-
-      obtenerUbicacionesDireccion(query, (resultados) => {
-        if (resultados.length > 0) {
-          mostrarListaSugerencias(resultados);
-          if (resultados.length === 1) {
-            seleccionarUbicacion(resultados[0].lat, resultados[0].lon, resultados[0].display_name);
-          }
-        } else {
-          alert("No se encontró el número exacto o dirección en Iztacalco. Intenta ajustando la calle o colonia.");
-        }
+    function obtenerSeccionesFiltradas() {
+      const dist = document.getElementById('selectDistrito').value;
+      const sec = document.getElementById('selectSeccion').value;
+      return listaSecciones.filter(item => {
+        const coincideDist = dist === 'TODOS' || item.distrito === dist;
+        const coincideSec = !sec || item.seccion === sec;
+        return coincideDist && coincideSec;
       });
     }
 
-    function obtenerUbicacionesDireccion(query, callback) {
-      if (GOOGLE_API_KEY !== "") {
-        // Opción 1: API de Google Maps Geocoding si se proporciona Key
-        const urlGoogle = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query + ", Iztacalco, CDMX")}&key=${GOOGLE_API_KEY}`;
-        fetch(urlGoogle)
-          .then(res => res.json())
-          .then(data => {
-            if (data.results) {
-              const formateados = data.results.map(r => ({
-                lat: r.geometry.location.lat,
-                lon: r.geometry.location.lng,
-                display_name: r.formatted_address
-              }));
-              callback(formateados);
-            } else { callback([]); }
-          }).catch(() => callback([]));
-        return;
-      }
+    function poblarSelectorSecciones() {
+      const dist = document.getElementById('selectDistrito').value;
+      const selectSec = document.getElementById('selectSeccion');
+      const valorPrevio = selectSec.value;
 
-      // Opción 2: Motor Nominatim optimizado por parámetros estructurados
-      let queryLimpia = query;
-      if (!query.toLowerCase().includes("iztacalco")) queryLimpia += ", Iztacalco";
-      if (!query.toLowerCase().includes("méxico") && !query.toLowerCase().includes("cdmx")) queryLimpia += ", Ciudad de México";
+      selectSec.innerHTML = '<option value="">Todas las secciones del filtro...</option>';
 
-      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=8&addressdetails=1&dedupe=1&countrycodes=mx&q=${encodeURIComponent(queryLimpia)}`;
-
-      fetch(url)
-        .then(res => res.json())
-        .then(data => callback(data || []))
-        .catch(err => callback([]));
-    }
-
-    function mostrarListaSugerencias(resultados) {
-      const listContainer = document.getElementById('listaSugerencias');
-      listContainer.innerHTML = '';
-
-      if (resultados.length === 0) {
-        listContainer.style.display = 'none';
-        return;
-      }
-
-      resultados.forEach(item => {
-        const li = document.createElement('li');
-        li.innerHTML = `📍 ${item.display_name}`;
-        li.onclick = () => {
-          seleccionarUbicacion(item.lat, item.lon, item.display_name);
-        };
-        listContainer.appendChild(li);
+      const disponibles = listaSecciones.filter(s => dist === 'TODOS' || s.distrito === dist);
+      disponibles.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.seccion;
+        opt.textContent = `Sección ${s.seccion} (Distrito ${s.distrito})`;
+        selectSec.appendChild(opt);
       });
 
-      listContainer.style.display = 'block';
-    }
-
-    function seleccionarUbicacion(lat, lon, displayName) {
-      document.getElementById('listaSugerencias').style.display = 'none';
-      document.getElementById('inputBusquedaDireccion').value = displayName.split(',')[0];
-
-      const latNum = parseFloat(lat);
-      const lonNum = parseFloat(lon);
-
-      map.setView([latNum, lonNum], 18);
-
-      const punto = turf.point([lonNum, latNum]);
-      let seccionEncontrada = null;
-      let distritoEncontrado = null;
-      let rutaEncontrada = null;
-
-      // Buscar Sección Electoral en D11
-      for (let feat of seccionesFeaturesD11) {
-        if (turf.booleanPointInPolygon(punto, feat)) {
-          seccionEncontrada = feat.properties.SECCION || feat.properties.seccion;
-          distritoEncontrado = "Distrito Local 11";
-          break;
-        }
-      }
-
-      // Buscar Sección Electoral en D15
-      if (!seccionEncontrada) {
-        for (let feat of seccionesFeaturesD15) {
-          if (turf.booleanPointInPolygon(punto, feat)) {
-            seccionEncontrada = feat.properties.SECCION || feat.properties.seccion;
-            distritoEncontrado = "Distrito Local 15";
-            break;
-          }
-        }
-      }
-
-      // Buscar Ruta D11
-      for (let feat of rutasFeaturesD11) {
-        if (turf.booleanPointInPolygon(punto, feat)) {
-          rutaEncontrada = feat.properties.ruta || feat.properties.RUTA;
-          break;
-        }
-      }
-
-      // Buscar Ruta D15
-      if (!rutaEncontrada) {
-        for (let feat of rutasFeaturesD15) {
-          if (turf.booleanPointInPolygon(punto, feat)) {
-            rutaEncontrada = feat.properties.ruta || feat.properties.RUTA;
-            break;
-          }
-        }
-      }
-
-      let mensajePopup = `
-        <b>📍 Ubicación Encontrada:</b><br><span style="font-size:11px; color:#555;">${displayName}</span><hr style="margin:6px 0;">
-        <b>🗳 Sección Electoral:</b> <span style="color:#117a65; font-size:14px; font-weight:bold;">${seccionEncontrada ? seccionEncontrada : 'No detectada'}</span><br>
-        <b>🏛 Distrito:</b> ${distritoEncontrado ? distritoEncontrado : 'N/D'}<br>
-        <b>🔲 Ruta:</b> ${rutaEncontrada ? rutaEncontrada : 'N/D'}<br><br>
-        <button class="btn-registrar-aqui" onclick="abrirModalConCoordenadas(${latNum}, ${lonNum}, '${seccionEncontrada || ''}', '${displayName.replace(/'/g, "\\'")}')">
-          ➕ Registrar Casa Aquí
-        </button>
-      `;
-
-      if (clickMarker) map.removeLayer(clickMarker);
-      clickMarker = L.marker([latNum, lonNum]).addTo(map).bindPopup(mensajePopup).openPopup();
-    }
-
-    document.addEventListener('click', function(e) {
-      if (!e.target.closest('.search-box-wrapper')) {
-        document.getElementById('listaSugerencias').style.display = 'none';
-      }
-    });
-
-    map.on('zoomend', function() {
-      const currentZoom = map.getZoom();
-      document.querySelectorAll('.etiqueta-seccion').forEach(el => {
-        el.style.display = (currentZoom < 14) ? 'none' : 'block';
-      });
-    });
-
-    function toggleRazonNoRegistro() {
-      const reg = document.getElementById('registro_plataforma').value;
-      document.getElementById('group-razon').style.display = (reg === 'false') ? 'block' : 'none';
-    }
-
-    function validarTelefono() {
-      const tel = document.getElementById('telefono').value.replace(/\D/g, '');
-      document.getElementById('telefono').value = tel;
-      const telError = document.getElementById('tel-error');
-      if (tel.length > 0 && tel.length !== 10) {
-        telError.style.display = 'block';
-        return false;
-      } else {
-        telError.style.display = 'none';
-        return true;
+      if (disponibles.some(s => s.seccion === valorPrevio)) {
+        selectSec.value = valorPrevio;
       }
     }
 
-    let cropper = null;
-    let fotoTipoActual = null;
-    let archivoFotoFrente = null;
-    let archivoFotoReverso = null;
+    function renderizarTablaSidebar() {
+      const tbody = document.getElementById('tbodySidebarSecciones');
+      const filtradas = obtenerSeccionesFiltradas();
+      document.getElementById('contadorTablaSidebar').textContent = filtradas.length;
 
-    async function estandarizarImagen(archivo) {
-      if (!archivo) return null;
-      const nombreLower = archivo.name.toLowerCase();
-      const tipoLower = archivo.type.toLowerCase();
-
-      if (tipoLower.includes('heic') || tipoLower.includes('heif') || nombreLower.endsWith('.heic') || nombreLower.endsWith('.heif')) {
-        if (window.heic2any) {
-          try {
-            const blobConvertido = await window.heic2any({ blob: archivo, toType: 'image/jpeg', quality: 0.85 });
-            const blobFinal = Array.isArray(blobConvertido) ? blobConvertido[0] : blobConvertido;
-            return new File([blobFinal], archivo.name.replace(/\.(heic|heif)$/i, '.jpg'), { type: 'image/jpeg' });
-          } catch (e) { console.warn(e); }
-        }
-      }
-      return archivo;
-    }
-
-    function abrirCropperModal(file, tipo) {
-      fotoTipoActual = tipo;
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        const imageElement = document.getElementById('cropper-img');
-        imageElement.src = e.target.result;
-        document.getElementById('modalCropper').style.display = 'flex';
-        if (cropper) cropper.destroy();
-        cropper = new Cropper(imageElement, { viewMode: 1, autoCropArea: 0.9, responsive: true, restore: false });
-      };
-      reader.readAsDataURL(file);
-    }
-
-    function rotarCropper(grados) { if (cropper) cropper.rotate(grados); }
-    function cerrarCropper() {
-      document.getElementById('modalCropper').style.display = 'none';
-      if (cropper) { cropper.destroy(); cropper = null; }
-    }
-
-    function confirmarRecorte() {
-      if (!cropper) return;
-      const canvas = cropper.getCroppedCanvas({ maxWidth: 1600, maxHeight: 1600, fillColor: '#fff' });
-      canvas.toBlob(async (blob) => {
-        const archivoEditado = new File([blob], `credencial_${fotoTipoActual}_editada.jpg`, { type: 'image/jpeg' });
-        if (fotoTipoActual === 'frente') {
-          archivoFotoFrente = archivoEditado;
-          document.getElementById('preview-img-frente').src = URL.createObjectURL(archivoEditado);
-          document.getElementById('preview-container-frente').style.display = 'block';
-        } else if (fotoTipoActual === 'reverso') {
-          archivoFotoReverso = archivoEditado;
-          document.getElementById('preview-img-reverso').src = URL.createObjectURL(archivoEditado);
-          document.getElementById('preview-container-reverso').style.display = 'block';
-        }
-        cerrarCropper();
-      }, 'image/jpeg', 0.85);
-    }
-
-    async function procesarFotoFrente(event) {
-      const fileRaw = event.target.files[0];
-      if (!fileRaw) return;
-      const status = document.getElementById('status-frente');
-      status.style.display = 'block';
-      try {
-        const fileEstandar = await estandarizarImagen(fileRaw);
-        status.style.display = 'none';
-        abrirCropperModal(fileEstandar, 'frente');
-      } catch (err) { status.style.display = 'none'; }
-    }
-
-    async function procesarFotoReverso(event) {
-      const fileRaw = event.target.files[0];
-      if (!fileRaw) return;
-      const status = document.getElementById('status-reverso');
-      status.style.display = 'block';
-      try {
-        const fileEstandar = await estandarizarImagen(fileRaw);
-        status.style.display = 'none';
-        abrirCropperModal(fileEstandar, 'reverso');
-      } catch (err) { status.style.display = 'none'; }
-    }
-
-    async function extraerTextoReverso() {
-      if (!archivoFotoReverso) {
-        alert("Por favor carga primero la foto del REVERSO.");
+      if (filtradas.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-slate-400">Sin secciones para mostrar</td></tr>';
         return;
       }
-      const status = document.getElementById('status-reverso');
-      status.innerText = "⏳ Leyendo OCR...";
-      status.style.display = 'block';
 
-      try {
-        const worker = await Tesseract.createWorker('spa');
-        const ret = await worker.recognize(archivoFotoReverso);
-        await worker.terminate();
-
-        const texto = ret.data.text.toUpperCase();
-        const patronChevron13 = /(?:<<|«|<{1,2})\s*(\d{13})\b/;
-        const matchChevron = texto.match(patronChevron13);
-        let ocrCompleto = matchChevron ? matchChevron[1] : (texto.match(/\b(\d{13})\b/) || [])[1];
-
-        if (ocrCompleto) {
-          const seccionExtraida = ocrCompleto.substring(0, 4);
-          document.getElementById('ocr_resultado').value = ocrCompleto;
-          document.getElementById('seccion_electoral').value = seccionExtraida;
-          alert(`✅ ¡Lectura exitosa!\n• OCR: ${ocrCompleto}\n• Sección: ${seccionExtraida}`);
-        } else {
-          alert("⚠️ No se identificaron los 13 dígitos.");
-        }
-      } catch (e) {
-        alert("Error al ejecutar OCR: " + e.message);
-      } finally {
-        status.style.display = 'none';
-        status.innerText = "⏳ Procesando imagen...";
-      }
-    }
-
-    let clickMarker;
-    function abrirModalConCoordenadas(lat, lng, seccionAuto = '', direccionAuto = '') {
-      document.getElementById('lat').value = lat;
-      document.getElementById('lng').value = lng;
-      
-      if (seccionAuto) {
-        document.getElementById('seccion_electoral').value = seccionAuto;
-      }
-      if (direccionAuto) {
-        document.getElementById('direccion').value = direccionAuto;
-      }
-
-      if (clickMarker) map.removeLayer(clickMarker);
-      clickMarker = L.marker([lat, lng]).addTo(map);
-
-      document.getElementById('modalForm').style.display = 'flex';
-      toggleRazonNoRegistro();
-    }
-
-    map.on('click', function(e) {
-      abrirModalConCoordenadas(e.latlng.lat, e.latlng.lng);
-    });
-
-    function cerrarModal() {
-      document.getElementById('modalForm').style.display = 'none';
-      if (clickMarker) map.removeLayer(clickMarker);
-      archivoFotoFrente = null;
-      archivoFotoReverso = null;
-      document.getElementById('preview-container-frente').style.display = 'none';
-      document.getElementById('preview-container-reverso').style.display = 'none';
-      document.getElementById('foto_ine_frente').value = '';
-      document.getElementById('foto_ine_reverso').value = '';
-      document.getElementById('seccion_electoral').value = '';
-      document.getElementById('ocr_resultado').value = '';
-      document.getElementById('observaciones').value = '';
-      document.getElementById('direccion').value = '';
-    }
-
-    function abrirModalTabla() {
-      document.getElementById('modalTabla').style.display = 'flex';
-      renderizarTablaYTotales();
-    }
-    function cerrarModalTabla() { document.getElementById('modalTabla').style.display = 'none'; }
-
-    async function guardarRegistro() {
-      const brigadista = document.getElementById('brigadista').value.trim();
-      const telefono = document.getElementById('telefono').value.trim();
-
-      if (!brigadista) { alert("Ingresa el nombre del brigadista."); return; }
-      if (telefono.length > 0 && telefono.length !== 10) { alert("El teléfono debe ser de 10 dígitos."); return; }
-
-      let fotoUrl = null;
-      let archivoASubir = archivoFotoFrente || archivoFotoReverso;
-
-      if (_supabase && archivoASubir) {
-        try {
-          const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
-          const { error: uploadError } = await _supabase.storage.from('fotos-ine').upload(fileName, archivoASubir);
-          if (!uploadError) {
-            const { data: publicUrlData } = _supabase.storage.from('fotos-ine').getPublicUrl(fileName);
-            fotoUrl = publicUrlData.publicUrl;
-          }
-        } catch (e) { console.error(e); }
-      }
-
-      const nombrePersona = document.getElementById('nombre_persona').value.trim() || 'No proporcionado';
-      const seccion = document.getElementById('seccion_electoral').value.trim() || null;
-      const ocrDato = document.getElementById('ocr_resultado').value.trim() || null;
-      const simpatizante = document.getElementById('simpatizante').value === 'true';
-      const entregoIne = document.getElementById('entrego_ine').value === 'true';
-      const registroPlataforma = document.getElementById('registro_plataforma').value === 'true';
-      const razonNoRegistro = registroPlataforma ? 'N/A' : (document.getElementById('razon_no_registro').value.trim() || 'No especificado');
-      const direccion = document.getElementById('direccion').value.trim() || 'No especificada';
-      const observaciones = document.getElementById('observaciones').value.trim();
-      const lat = parseFloat(document.getElementById('lat').value);
-      const lng = parseFloat(document.getElementById('lng').value);
-
-      if (_supabase) {
-        const { error } = await _supabase.from('simpatizantes').insert([{
-          brigadista_nombre: brigadista, nombre_persona: nombrePersona, seccion_electoral: seccion,
-          ine_clave_elector: ocrDato, telefono: telefono || null, es_simpatizante: simpatizante,
-          entrego_ine: entregoIne, registro_plataforma: registroPlataforma, razon_no_registro: razonNoRegistro,
-          foto_ine_url: fotoUrl, direccion: direccion, observaciones: observaciones, lat: lat, lng: lng
-        }]);
-
-        if (error) {
-          alert("Error al guardar: " + error.message);
-        } else {
-          alert("¡Registro guardado exitosamente!");
-          cerrarModal();
-          cargarCasasGuardadas();
-        }
-      }
-    }
-
-    async function cargarCasasGuardadas() {
-      capaCasas.clearLayers();
-      if (!_supabase) return;
-      const { data, error } = await _supabase.from('simpatizantes').select('*').order('id', { ascending: false });
-      if (!error && data) {
-        registrosCargados = data;
-        data.forEach(casa => {
-          const colorIcono = casa.es_simpatizante ? '#27ae60' : '#f39c12';
-          let popupContent = `
-            <b>Brigadista:</b> ${casa.brigadista_nombre}<br>
-            <b>Contacto:</b> ${casa.nombre_persona || 'No proporcionado'}<br>
-            <b>Sección Electoral:</b> ${casa.seccion_electoral || 'N/A'}<br>
-            <b>Código OCR:</b> ${casa.ine_clave_elector || 'N/A'}<br>
-            <b>Teléfono:</b> ${casa.telefono || 'N/A'}<br>
-            <b>Simpatizante:</b> ${casa.es_simpatizante ? 'Sí' : 'No'}<br>
-            <b>Entregó INE:</b> ${casa.entrego_ine ? 'Sí' : 'No'}<br>
-            <b>Dirección:</b> ${casa.direccion || 'S/N'}<br>
-          `;
-          if (casa.foto_ine_url) {
-            popupContent += `<br><a href="${casa.foto_ine_url}" target="_blank"><img src="${casa.foto_ine_url}" style="width:100%; border-radius:4px; max-height:100px; object-fit:cover;"></a>`;
-          }
-          const marcador = L.circleMarker([casa.lat, casa.lng], {
-            radius: 8, fillColor: colorIcono, color: '#000', weight: 1, opacity: 1, fillOpacity: 0.85
-          }).bindPopup(popupContent);
-          capaCasas.addLayer(marcador);
-        });
-      }
-    }
-    cargarCasasGuardadas();
-
-    function renderizarTablaYTotales() {
-      const cuerpo = document.getElementById('cuerpoTabla');
-      cuerpo.innerHTML = '';
-      let countTotal = registrosCargados.length;
-      let countSimpa = 0;
-      let countIne = 0;
-
-      registrosCargados.forEach(item => {
-        if (item.es_simpatizante) countSimpa++;
-        if (item.entrego_ine) countIne++;
-
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${item.brigadista_nombre}</td>
-          <td>${item.nombre_persona || 'N/A'}</td>
-          <td><b>${item.seccion_electoral || 'N/A'}</b></td>
-          <td><code style="color:#0d6efd;">${item.ine_clave_elector || 'N/A'}</code></td>
-          <td>${item.telefono || 'N/A'}</td>
-          <td><span class="${item.es_simpatizante ? 'badge-simpa' : 'badge-nosimpa'}">${item.es_simpatizante ? 'Sí' : 'No'}</span></td>
-          <td>${item.entrego_ine ? 'Sí' : 'No'}</td>
-          <td>${item.registro_plataforma ? 'Sí' : 'No'}</td>
-          <td>${item.direccion || 'S/N'}</td>
+      tbody.innerHTML = filtradas.map(s => {
+        const activa = seccionSeleccionadaActual === s.seccion;
+        return `
+          <tr onclick="enfocarSeccionEnMapa('${s.seccion}')" class="cursor-pointer transition ${activa ? 'bg-blue-50 font-semibold' : 'hover:bg-slate-50'}">
+            <td class="py-2 px-2.5">
+              <span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${s.distrito === '11' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}">
+                D${s.distrito}
+              </span>
+            </td>
+            <td class="py-2 px-2 font-bold text-slate-800">${s.seccion}</td>
+            <td class="py-2 px-2.5 text-right text-amber-700 font-medium">${s.padron.toLocaleString('es-MX')}</td>
+            <td class="py-2 px-2.5 text-right text-emerald-700 font-medium">${s.nominal.toLocaleString('es-MX')}</td>
+          </tr>
         `;
-        cuerpo.appendChild(tr);
-      });
-
-      document.getElementById('kpi-total').innerText = countTotal;
-      document.getElementById('kpi-simpatizantes').innerText = countSimpa;
-      document.getElementById('kpi-ine').innerText = countIne;
+      }).join('');
     }
 
-    function filtrarTabla() {
-      const texto = document.getElementById('buscadorTabla').value.toLowerCase();
-      document.querySelectorAll('#cuerpoTabla tr').forEach(fila => {
-        fila.style.display = fila.innerText.toLowerCase().includes(texto) ? '' : 'none';
+    function actualizarKPIs() {
+      const filtradas = obtenerSeccionesFiltradas();
+      const totalSec = filtradas.length;
+      const totalPad = filtradas.reduce((acc, s) => acc + s.padron, 0);
+      const totalNom = filtradas.reduce((acc, s) => acc + s.nominal, 0);
+      const cobertura = totalPad > 0 ? ((totalNom / totalPad) * 100).toFixed(2) : '0.00';
+
+      document.getElementById('kpiTotalSecciones').textContent = totalSec.toLocaleString('es-MX');
+      document.getElementById('kpiPadronTotal').textContent = totalPad.toLocaleString('es-MX');
+      document.getElementById('kpiNominalTotal').textContent = totalNom.toLocaleString('es-MX');
+      document.getElementById('kpiCoberturaTotal').textContent = `${cobertura}%`;
+    }
+
+    // =========================================================================
+    // INTERACCIÓN CON FILTROS Y CAPAS DEL MAPA
+    // =========================================================================
+    function alCambiarDistrito() {
+      const dist = document.getElementById('selectDistrito').value;
+      document.getElementById('selectSeccion').value = '';
+      limpiarResaltadoSeccion();
+      map.closePopup();
+
+      // Sincronizar checkboxes de capas según distrito elegido
+      if (dist === 'TODOS') {
+        document.getElementById('chkLimD11').checked = true;
+        document.getElementById('chkSecD11').checked = true;
+        document.getElementById('chkLimD15').checked = true;
+        document.getElementById('chkSecD15').checked = true;
+        actualizarVisibilidadCapas();
+        if (grupoLimitesTotales.getLayers().length > 0) {
+          map.fitBounds(grupoLimitesTotales.getBounds(), { padding: [30, 30] });
+        }
+      } else if (dist === '11') {
+        document.getElementById('chkLimD11').checked = true;
+        document.getElementById('chkSecD11').checked = true;
+        document.getElementById('chkLimD15').checked = false;
+        document.getElementById('chkSecD15').checked = false;
+        actualizarVisibilidadCapas();
+        if (geoJsonLimD11) {
+          map.fitBounds(geoJsonLimD11.getBounds(), { padding: [30, 30] });
+        }
+      } else if (dist === '15') {
+        document.getElementById('chkLimD11').checked = false;
+        document.getElementById('chkSecD11').checked = false;
+        document.getElementById('chkLimD15').checked = true;
+        document.getElementById('chkSecD15').checked = true;
+        actualizarVisibilidadCapas();
+        if (geoJsonLimD15) {
+          map.fitBounds(geoJsonLimD15.getBounds(), { padding: [30, 30] });
+        }
+      }
+
+      poblarSelectorSecciones();
+      renderizarTablaSidebar();
+      actualizarKPIs();
+    }
+
+    function alCambiarSeccion() {
+      const sec = document.getElementById('selectSeccion').value;
+      if (!sec) {
+        limpiarResaltadoSeccion();
+        map.closePopup();
+        renderizarTablaSidebar();
+        actualizarKPIs();
+        return;
+      }
+      enfocarSeccionEnMapa(sec);
+    }
+
+    function enfocarSeccionEnMapa(numSeccion) {
+      const info = listaSecciones.find(s => s.seccion === String(numSeccion));
+      if (!info) return;
+
+      // Asegurar que la capa del distrito esté visible
+      if (info.distrito === '11' && !document.getElementById('chkSecD11').checked) {
+        document.getElementById('chkSecD11').checked = true;
+        actualizarVisibilidadCapas();
+      }
+      if (info.distrito === '15' && !document.getElementById('chkSecD15').checked) {
+        document.getElementById('chkSecD15').checked = true;
+        actualizarVisibilidadCapas();
+      }
+
+      document.getElementById('selectSeccion').value = info.seccion;
+      resaltarSeccion(info.seccion, true);
+      renderizarTablaSidebar();
+      actualizarKPIs();
+
+      // En móvil, cerrar sidebar para ver el mapa
+      if (window.innerWidth < 1024) {
+        document.getElementById('sidebarPanel').classList.add('-translate-x-full');
+      }
+    }
+
+    function resaltarSeccion(numSeccion, hacerZoom = false) {
+      limpiarResaltadoSeccion();
+      const info = listaSecciones.find(s => s.seccion === String(numSeccion));
+      if (!info) return;
+
+      seccionSeleccionadaActual = info.seccion;
+      info.layer.setStyle(estiloBaseSeccion(info.distrito, true));
+      info.layer.bringToFront();
+
+      if (hacerZoom) {
+        map.fitBounds(info.layer.getBounds(), { maxZoom: 16, padding: [50, 50] });
+      }
+      info.layer.openPopup();
+    }
+
+    function limpiarResaltadoSeccion() {
+      if (!seccionSeleccionadaActual) return;
+      const prev = listaSecciones.find(s => s.seccion === seccionSeleccionadaActual);
+      if (prev) {
+        prev.layer.setStyle(estiloBaseSeccion(prev.distrito, false));
+      }
+      seccionSeleccionadaActual = null;
+    }
+
+    function restablecerVista() {
+      document.getElementById('selectDistrito').value = 'TODOS';
+      document.getElementById('selectSeccion').value = '';
+      alCambiarDistrito();
+    }
+
+    function actualizarVisibilidadCapas() {
+      const verLim11 = document.getElementById('chkLimD11').checked;
+      const verSec11 = document.getElementById('chkSecD11').checked;
+      const verLim15 = document.getElementById('chkLimD15').checked;
+      const verSec15 = document.getElementById('chkSecD15').checked;
+
+      verLim11 ? map.addLayer(layerLimD11) : map.removeLayer(layerLimD11);
+      verSec11 ? map.addLayer(layerSecD11) : map.removeLayer(layerSecD11);
+      verLim15 ? map.addLayer(layerLimD15) : map.removeLayer(layerLimD15);
+      verSec15 ? map.addLayer(layerSecD15) : map.removeLayer(layerSecD15);
+
+      actualizarEtiquetasZoom();
+    }
+
+    function actualizarEtiquetasZoom() {
+      const mostrar = document.getElementById('chkEtiquetas').checked && map.getZoom() >= 13;
+      document.querySelectorAll('.etiqueta-seccion').forEach(el => {
+        el.style.display = mostrar ? 'block' : 'none';
       });
     }
 
-    function descargarCSV() {
-      if (registrosCargados.length === 0) { alert("No hay registros."); return; }
-      let csvContent = "data:text/csv;charset=utf-8,ID,Brigadista,Nombre Ciudadano,Seccion Electoral,Codigo OCR,Telefono,Es Simpatizante,Entrego INE,Registro Plataforma,Razon No Registro,Direccion,Latitud,Longitud\n";
-      registrosCargados.forEach(row => {
-        csvContent += [
-          row.id, `"${row.brigadista_nombre || ''}"`, `"${row.nombre_persona || ''}"`,
-          `"${row.seccion_electoral || ''}"`, `"${row.ine_clave_elector || ''}"`, `"${row.telefono || ''}"`,
-          row.es_simpatizante ? "Si" : "No", row.entrego_ine ? "Si" : "No", row.registro_plataforma ? "Si" : "No",
-          `"${row.razon_no_registro || ''}"`, `"${row.direccion || ''}"`, row.lat, row.lng
-        ].join(",") + "\n";
-      });
-      const link = document.createElement("a");
-      link.setAttribute("href", encodeURI(csvContent));
-      link.setAttribute("download", `Registros_Iztacalco_${new Date().toISOString().slice(0,10)}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
+    map.on('zoomend', actualizarEtiquetasZoom);
 
-    function centrarGPS() { map.locate({setView: true, maxZoom: 18, enableHighAccuracy: true}); }
-
-    map.on('locationfound', function(e) {
-      if (gpsMarker) map.removeLayer(gpsMarker);
-      const lat = e.latlng.lat; const lng = e.latlng.lng;
-      const popupHtml = `
-        <div style="text-align:center;">
-          <b>📍 ¡Estás aquí!</b><br><br>
-          <button class="btn-registrar-aqui" onclick="abrirModalConCoordenadas(${lat}, ${lng})">➕ Registrar en mi ubicación</button>
-        </div>
-      `;
-      L.circle(e.latlng, e.accuracy / 2, { color: '#007bff', fillColor: '#007bff', fillOpacity: 0.15 }).addTo(map);
-      gpsMarker = L.marker(e.latlng).addTo(map).bindPopup(popupHtml).openPopup();
+    // Actualizar coordenadas al mover el puntero
+    map.on('mousemove', function (e) {
+      document.getElementById('coordDisplay').textContent = `${e.latlng.lat.toFixed(5)} · ${e.latlng.lng.toFixed(5)}`;
     });
 
-    map.on('locationerror', function() { alert("No se pudo obtener la ubicación GPS."); });
+    function toggleSidebarMobile() {
+      const sidebar = document.getElementById('sidebarPanel');
+      sidebar.classList.toggle('-translate-x-full');
+      setTimeout(() => map.invalidateSize(), 310);
+    }
+
+    // =========================================================================
+    // REPORTE CONSOLIDADO Y DESGLOSE POR DISTRITO (MODAL + PDF + CSV)
+    // =========================================================================
+    function abrirModalReporte() {
+      const distFiltro = document.getElementById('selectDistrito').value;
+      const seccionesReporte = listaSecciones.filter(s => distFiltro === 'TODOS' || s.distrito === distFiltro);
+
+      document.getElementById('subtituloReporteModal').textContent =
+        distFiltro === 'TODOS'
+          ? 'Padrón Electoral y Lista Nominal — Distritos Locales 11 y 15'
+          : `Padrón Electoral y Lista Nominal — Distrito Local ${distFiltro}`;
+
+      // 1. Construir Resumen Consolidado por Distrito
+      const tbodyResumen = document.getElementById('tbodyReporteResumen');
+      tbodyResumen.innerHTML = '';
+
+      const distritosUnicos = [...new Set(seccionesReporte.map(s => s.distrito))].sort((a, b) => Number(a) - Number(b));
+      let granTotalSec = 0, granTotalPad = 0, granTotalNom = 0;
+
+      distritosUnicos.forEach(dist => {
+        const delDistrito = seccionesReporte.filter(s => s.distrito === dist);
+        const pad = delDistrito.reduce((acc, s) => acc + s.padron, 0);
+        const nom = delDistrito.reduce((acc, s) => acc + s.nominal, 0);
+        const cob = pad > 0 ? ((nom / pad) * 100).toFixed(2) : '0.00';
+
+        granTotalSec += delDistrito.length;
+        granTotalPad += pad;
+        granTotalNom += nom;
+
+        tbodyResumen.innerHTML += `
+          <tr>
+            <td class="py-2.5 px-3 font-bold text-slate-900">Distrito Local ${dist}</td>
+            <td class="py-2.5 px-3 text-center font-semibold">${delDistrito.length.toLocaleString('es-MX')}</td>
+            <td class="py-2.5 px-3 text-right font-bold text-amber-700">${pad.toLocaleString('es-MX')}</td>
+            <td class="py-2.5 px-3 text-right font-bold text-emerald-700">${nom.toLocaleString('es-MX')}</td>
+            <td class="py-2.5 px-3 text-right font-semibold text-blue-700">${cob}%</td>
+          </tr>
+        `;
+      });
+
+      if (distritosUnicos.length > 1) {
+        const granCob = granTotalPad > 0 ? ((granTotalNom / granTotalPad) * 100).toFixed(2) : '0.00';
+        tbodyResumen.innerHTML += `
+          <tr class="bg-slate-100 font-extrabold text-slate-900">
+            <td class="py-2.5 px-3">TOTAL CONSOLIDADO</td>
+            <td class="py-2.5 px-3 text-center">${granTotalSec.toLocaleString('es-MX')}</td>
+            <td class="py-2.5 px-3 text-right text-amber-800">${granTotalPad.toLocaleString('es-MX')}</td>
+            <td class="py-2.5 px-3 text-right text-emerald-800">${granTotalNom.toLocaleString('es-MX')}</td>
+            <td class="py-2.5 px-3 text-right text-blue-800">${granCob}%</td>
+          </tr>
+        `;
+      }
+
+      // 2. Construir Desglose Detallado por Distrito y Sección
+      const tbodyDesglose = document.getElementById('tbodyReporteDesglose');
+      tbodyDesglose.innerHTML = '';
+
+      distritosUnicos.forEach(dist => {
+        const delDistrito = seccionesReporte.filter(s => s.distrito === dist);
+        let subPad = 0, subNom = 0;
+
+        delDistrito.forEach(s => {
+          subPad += s.padron;
+          subNom += s.nominal;
+          tbodyDesglose.innerHTML += `
+            <tr class="hover:bg-slate-50">
+              <td class="py-2 px-3 text-slate-700">Distrito Local ${s.distrito}</td>
+              <td class="py-2 px-3 text-center font-bold text-slate-900">${s.seccion}</td>
+              <td class="py-2 px-3 text-right text-amber-700 font-medium">${s.padron.toLocaleString('es-MX')}</td>
+              <td class="py-2 px-3 text-right text-emerald-700 font-medium">${s.nominal.toLocaleString('es-MX')}</td>
+              <td class="py-2 px-3 text-right text-slate-600">${s.cobertura}%</td>
+            </tr>
+          `;
+        });
+
+        const subCob = subPad > 0 ? ((subNom / subPad) * 100).toFixed(2) : '0.00';
+        tbodyDesglose.innerHTML += `
+          <tr class="bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-300">
+            <td class="py-2 px-3" colspan="2">SUBTOTAL DISTRITO LOCAL ${dist} (${delDistrito.length} secciones)</td>
+            <td class="py-2 px-3 text-right text-amber-800">${subPad.toLocaleString('es-MX')}</td>
+            <td class="py-2 px-3 text-right text-emerald-800">${subNom.toLocaleString('es-MX')}</td>
+            <td class="py-2 px-3 text-right text-blue-800">${subCob}%</td>
+          </tr>
+        `;
+      });
+
+      document.getElementById('modalReporte').classList.remove('hidden');
+    }
+
+    function cerrarModalReporte() {
+      document.getElementById('modalReporte').classList.add('hidden');
+    }
+
+    function descargarCSVPorDistrito() {
+      const distFiltro = document.getElementById('selectDistrito').value;
+      const seccionesReporte = listaSecciones.filter(s => distFiltro === 'TODOS' || s.distrito === distFiltro);
+
+      if (seccionesReporte.length === 0) return;
+
+      let csv = '\uFEFFDistrito Local,Numero de Seccion,Padron Electoral Total,Lista Nominal Total,Porcentaje Cobertura\n';
+      const distritosUnicos = [...new Set(seccionesReporte.map(s => s.distrito))].sort((a, b) => Number(a) - Number(b));
+
+      distritosUnicos.forEach(dist => {
+        const delDistrito = seccionesReporte.filter(s => s.distrito === dist);
+        let subPad = 0, subNom = 0;
+
+        delDistrito.forEach(s => {
+          subPad += s.padron;
+          subNom += s.nominal;
+          csv += `Distrito Local ${s.distrito},${s.seccion},${s.padron},${s.nominal},${s.cobertura}%\n`;
+        });
+
+        const subCob = subPad > 0 ? ((subNom / subPad) * 100).toFixed(2) : '0.00';
+        csv += `TOTAL DISTRITO LOCAL ${dist},${delDistrito.length} secciones,${subPad},${subNom},${subCob}%\n\n`;
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = distFiltro === 'TODOS'
+        ? 'Reporte_Padron_ListaNominal_Distritos_11_y_15.csv'
+        : `Reporte_Padron_ListaNominal_Distrito_${distFiltro}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
   </script>
 </body>
 </html>
