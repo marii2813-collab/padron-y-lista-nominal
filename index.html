@@ -28,16 +28,20 @@
       color: #0f172a;
     }
 
-    /* Etiquetas permanentes de sección en el mapa */
+    /* Etiquetas adaptadas para caber perfectamente en el polígono correspondiente */
     .etiqueta-seccion {
-      background: rgba(255, 255, 255, 0.92) !important;
-      border: 1px solid rgba(15, 23, 42, 0.35) !important;
-      border-radius: 4px !important;
+      background: rgba(255, 255, 255, 0.88) !important;
+      border: 1px solid rgba(15, 23, 42, 0.25) !important;
+      border-radius: 3px !important;
       font-weight: 700 !important;
-      font-size: 10px !important;
+      font-size: 9px !important;
       color: #0f172a !important;
-      padding: 1px 4px !important;
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15) !important;
+      padding: 0px 2px !important;
+      box-shadow: none !important;
+      text-align: center !important;
+      max-width: 38px !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
       white-space: nowrap !important;
     }
 
@@ -177,45 +181,7 @@
           </div>
         </section>
 
-        <!-- Bloque 2: Capas en el mapa -->
-        <section class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2.5">
-          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700">Capas en el mapa</h2>
-
-          <div class="space-y-2 text-xs text-slate-700">
-            <label class="flex items-center gap-2.5 cursor-pointer select-none">
-              <input type="checkbox" id="chkLimD11" checked onchange="actualizarVisibilidadCapas()" class="rounded border-slate-300 text-amber-600 focus:ring-amber-500 w-4 h-4" />
-              <span class="w-3 h-0.5 border-t-2 border-dashed border-amber-700 inline-block"></span>
-              <span>Límite Distrito Local 11</span>
-            </label>
-
-            <label class="flex items-center gap-2.5 cursor-pointer select-none">
-              <input type="checkbox" id="chkSecD11" checked onchange="actualizarVisibilidadCapas()" class="rounded border-slate-300 text-amber-600 focus:ring-amber-500 w-4 h-4" />
-              <span class="w-3 h-3 rounded-sm bg-amber-500/40 border border-amber-700 inline-block"></span>
-              <span>Secciones Distrito Local 11</span>
-            </label>
-
-            <label class="flex items-center gap-2.5 cursor-pointer select-none">
-              <input type="checkbox" id="chkLimD15" checked onchange="actualizarVisibilidadCapas()" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4" />
-              <span class="w-3 h-0.5 border-t-2 border-dashed border-blue-700 inline-block"></span>
-              <span>Límite Distrito Local 15</span>
-            </label>
-
-            <label class="flex items-center gap-2.5 cursor-pointer select-none">
-              <input type="checkbox" id="chkSecD15" checked onchange="actualizarVisibilidadCapas()" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4" />
-              <span class="w-3 h-3 rounded-sm bg-blue-500/40 border border-blue-700 inline-block"></span>
-              <span>Secciones Distrito Local 15</span>
-            </label>
-
-            <div class="pt-1 border-t border-slate-200">
-              <label class="flex items-center gap-2.5 cursor-pointer select-none">
-                <input type="checkbox" id="chkEtiquetas" checked onchange="actualizarEtiquetasZoom()" class="rounded border-slate-300 text-slate-800 focus:ring-slate-500 w-4 h-4" />
-                <span class="font-medium">Etiquetas de número de sección</span>
-              </label>
-            </div>
-          </div>
-        </section>
-
-        <!-- Bloque 3: Reporte por Distrito -->
+        <!-- Bloque 2: Reporte por Distrito -->
         <section class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2.5">
           <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700">Reporte por Distrito</h2>
 
@@ -228,7 +194,7 @@
           </button>
         </section>
 
-        <!-- Bloque 4: Detalle por sección -->
+        <!-- Bloque 3: Detalle por sección -->
         <section class="bg-white border border-slate-200 rounded-xl overflow-hidden flex flex-col">
           <div class="bg-slate-100 px-3.5 py-2 border-b border-slate-200 flex items-center justify-between">
             <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700">Detalle por sección</h2>
@@ -261,7 +227,7 @@
     <main class="flex-1 relative h-full w-full">
       <div id="map" class="h-full w-full z-10"></div>
 
-      <!-- Tarjetas KPI Flotantes Superiores (3 tarjetas limpias sin % Cobertura) -->
+      <!-- Tarjetas KPI Flotantes Superiores -->
       <div class="absolute top-3 left-3 right-14 z-20 pointer-events-none">
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 max-w-3xl">
           <div class="bg-white/95 backdrop-blur-sm border border-slate-200/90 rounded-xl p-2.5 sm:p-3 shadow-md pointer-events-auto">
@@ -385,13 +351,13 @@
 
     L.control.zoom({ position: 'topright' }).addTo(map);
 
-    // Mapa base OpenStreetMap estándar (sin marcas de agua ni API Key)
+    // Mapa base libre (OpenStreetMap)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(map);
 
-    // Grupos de capas
+    // Grupos de capas principales
     const layerLimD11 = L.layerGroup().addTo(map);
     const layerSecD11 = L.layerGroup().addTo(map);
     const layerLimD15 = L.layerGroup().addTo(map);
@@ -474,7 +440,7 @@
                 });
                 mapaCapasPorSeccion[seccion] = layer;
 
-                // Popup limpio con datos electorales (sin % cobertura)
+                // Popup con datos electorales limpios
                 const htmlPopup = `
                   <div class="min-w-[205px] text-xs space-y-1.5">
                     <div class="flex items-center justify-between border-b border-slate-200 pb-1">
@@ -495,7 +461,7 @@
                 `;
                 layer.bindPopup(htmlPopup);
 
-                // Etiqueta de número de sección
+                // Etiqueta compacta en el centro del polígono
                 layer.bindTooltip(seccion, {
                   permanent: true,
                   direction: 'center',
@@ -559,9 +525,7 @@
       cargarCapaGeoJSON('Distrito Local 11_Lista_Nominal_Padron.geojson', layerSecD11, 'sec_11'),
       cargarCapaGeoJSON('Distrito Local 15.geojson', layerLimD15, 'lim_15'),
       cargarCapaGeoJSON('Distrito Local 15_Lista_Nominal_Padron.geojson', layerSecD15, 'sec_15')
-    ]).then(() => {
-      actualizarEtiquetasZoom();
-    });
+    ]);
 
     // =========================================================================
     // ACTUALIZACIÓN DE FILTROS, TABLA LATERAL Y TARJETAS KPI
@@ -650,31 +614,27 @@
       limpiarResaltadoSeccion();
       map.closePopup();
 
-      // Sincronizar checkboxes de capas según distrito elegido
       if (dist === 'TODOS') {
-        document.getElementById('chkLimD11').checked = true;
-        document.getElementById('chkSecD11').checked = true;
-        document.getElementById('chkLimD15').checked = true;
-        document.getElementById('chkSecD15').checked = true;
-        actualizarVisibilidadCapas();
+        if (!map.hasLayer(layerLimD11)) map.addLayer(layerLimD11);
+        if (!map.hasLayer(layerSecD11)) map.addLayer(layerSecD11);
+        if (!map.hasLayer(layerLimD15)) map.addLayer(layerLimD15);
+        if (!map.hasLayer(layerSecD15)) map.addLayer(layerSecD15);
         if (grupoLimitesTotales.getLayers().length > 0) {
           map.fitBounds(grupoLimitesTotales.getBounds(), { padding: [30, 30] });
         }
       } else if (dist === '11') {
-        document.getElementById('chkLimD11').checked = true;
-        document.getElementById('chkSecD11').checked = true;
-        document.getElementById('chkLimD15').checked = false;
-        document.getElementById('chkSecD15').checked = false;
-        actualizarVisibilidadCapas();
+        if (!map.hasLayer(layerLimD11)) map.addLayer(layerLimD11);
+        if (!map.hasLayer(layerSecD11)) map.addLayer(layerSecD11);
+        if (map.hasLayer(layerLimD15)) map.removeLayer(layerLimD15);
+        if (map.hasLayer(layerSecD15)) map.removeLayer(layerSecD15);
         if (geoJsonLimD11) {
           map.fitBounds(geoJsonLimD11.getBounds(), { padding: [30, 30] });
         }
       } else if (dist === '15') {
-        document.getElementById('chkLimD11').checked = false;
-        document.getElementById('chkSecD11').checked = false;
-        document.getElementById('chkLimD15').checked = true;
-        document.getElementById('chkSecD15').checked = true;
-        actualizarVisibilidadCapas();
+        if (map.hasLayer(layerLimD11)) map.removeLayer(layerLimD11);
+        if (map.hasLayer(layerSecD11)) map.removeLayer(layerSecD11);
+        if (!map.hasLayer(layerLimD15)) map.addLayer(layerLimD15);
+        if (!map.hasLayer(layerSecD15)) map.addLayer(layerSecD15);
         if (geoJsonLimD15) {
           map.fitBounds(geoJsonLimD15.getBounds(), { padding: [30, 30] });
         }
@@ -701,14 +661,10 @@
       const info = listaSecciones.find(s => s.seccion === String(numSeccion));
       if (!info) return;
 
-      // Asegurar que la capa del distrito esté visible
-      if (info.distrito === '11' && !document.getElementById('chkSecD11').checked) {
-        document.getElementById('chkSecD11').checked = true;
-        actualizarVisibilidadCapas();
-      }
-      if (info.distrito === '15' && !document.getElementById('chkSecD15').checked) {
-        document.getElementById('chkSecD15').checked = true;
-        actualizarVisibilidadCapas();
+      if (info.distrito === '11') {
+        if (!map.hasLayer(layerSecD11)) map.addLayer(layerSecD11);
+      } else {
+        if (!map.hasLayer(layerSecD15)) map.addLayer(layerSecD15);
       }
 
       document.getElementById('selectSeccion').value = info.seccion;
@@ -716,7 +672,6 @@
       renderizarTablaSidebar();
       actualizarKPIs();
 
-      // En móvil, cerrar sidebar para ver el mapa
       if (window.innerWidth < 1024) {
         document.getElementById('sidebarPanel').classList.add('-translate-x-full');
       }
@@ -752,30 +707,6 @@
       alCambiarDistrito();
     }
 
-    function actualizarVisibilidadCapas() {
-      const verLim11 = document.getElementById('chkLimD11').checked;
-      const verSec11 = document.getElementById('chkSecD11').checked;
-      const verLim15 = document.getElementById('chkLimD15').checked;
-      const verSec15 = document.getElementById('chkSecD15').checked;
-
-      verLim11 ? map.addLayer(layerLimD11) : map.removeLayer(layerLimD11);
-      verSec11 ? map.addLayer(layerSecD11) : map.removeLayer(layerSecD11);
-      verLim15 ? map.addLayer(layerLimD15) : map.removeLayer(layerLimD15);
-      verSec15 ? map.addLayer(layerSecD15) : map.removeLayer(layerSecD15);
-
-      actualizarEtiquetasZoom();
-    }
-
-    function actualizarEtiquetasZoom() {
-      const mostrar = document.getElementById('chkEtiquetas').checked && map.getZoom() >= 13;
-      document.querySelectorAll('.etiqueta-seccion').forEach(el => {
-        el.style.display = mostrar ? 'block' : 'none';
-      });
-    }
-
-    map.on('zoomend', actualizarEtiquetasZoom);
-
-    // Actualizar coordenadas al mover el puntero
     map.on('mousemove', function (e) {
       document.getElementById('coordDisplay').textContent = `${e.latlng.lat.toFixed(5)} · ${e.latlng.lng.toFixed(5)}`;
     });
